@@ -109,8 +109,10 @@ User* Server::loginUser(
         << username
         << "logged in";
 
-    QString msg = user->username + " has connected";
-    notifyEveryone(msg);
+    UserConnectedPacket uc;
+    uc.id = user->id;
+    uc.username = user->username;
+    sendToAll(PacketType::UserConnected, PacketHelpers::pack(uc));
 
     printUsers();
 
@@ -137,8 +139,10 @@ void Server::removeUser(
         << user->username
         << "disconnected";
 
-    QString msg = user->username + " has disconnected";
-    notifyEveryone(msg);
+    UserDisconnectedPacket ud;
+    ud.id = user->id;
+    sendToAll(PacketType::UserDisconnected, PacketHelpers::pack(ud));
+
 
     delete user;
 }
@@ -175,8 +179,10 @@ Channel* Server::createChannel(
         << channel->id
         << channel->name;
 
-    QString msg = channel->id + " " + channel->name + "channel has created.";
-    notifyEveryone(msg);
+    ChannelCreatedPacket cc;
+    cc.id = channel->id;
+    cc.name = channel->name;
+    sendToAll(PacketType::ChannelCreated, PacketHelpers::pack(cc));
 
     return channel;
 }
@@ -212,7 +218,7 @@ bool Server::joinChannel(
     }
 
     if(target->password
-        != password)
+        != password && !target->password.isEmpty())
     {
         qDebug()
         << "wrong password";
@@ -238,10 +244,99 @@ bool Server::joinChannel(
         << "joined"
         << target->name;
 
-    QString joint = user->username + " joined " + target->name;
-    notifyEveryone(joint);
+
+    UserJoinedChannelPacket ujs;
+    ujs.channelId = target->id;
+    ujs.userId = user->id;
+
+    Packet packet;
+    packet.type = PacketType::UserJoinedChannel;
+    packet.payload = PacketHelpers::pack(ujs);
+
+    QByteArray bytes = packet.serialize();
+    for(auto user : m_users)
+        user->socket->write(bytes);
+
 
     return true;
+}
+
+QByteArray Server::buildServerState()
+{
+    ServerStatePacket state;
+
+    for(auto channel : m_channels)
+    {
+        ChannelInfo info;
+
+        info.id = channel->id;
+        info.name = channel->name;
+
+        info.permanentChat =
+            channel->permanentChat;
+
+        info.temporaryChat =
+            channel->temporaryChat;
+
+        state.channels.push_back(
+            info);
+    }
+
+    for(auto user : m_users)
+    {
+        UserInfo info;
+
+        info.id =
+            user->id;
+
+        info.username =
+            user->username;
+
+        info.channelId =
+            user->currentChannel
+                ? user->currentChannel->id
+                : 0;
+
+        info.muted =
+            user->muted;
+
+        info.deafened =
+            user->deafened;
+
+        state.users.push_back(
+            info);
+    }
+
+    return PacketHelpers::pack(state);
+}
+
+void Server::printChannels()
+{
+    qDebug() << "channels:";
+    for(Channel* channel: m_channels)
+    {
+        qDebug() << channel->id << " " << channel->name << " " << channel->password;
+    }
+}
+
+void Server::printChannelWithUsersIn()
+{
+    qDebug() << "channels:";
+    for(Channel* channel: m_channels)
+    {
+        qDebug() << channel->id << " " << channel->name << " " << channel->password;
+        for(User* c : channel->users)
+            qDebug() << "     " << c->username;
+    }
+}
+
+void Server::printUsers()
+{
+    qDebug() << "users:";
+    for(User* user: m_users)
+    {
+        qDebug() << user->id << " " << user->username << " " << user->identity << " " << user->ip;
+    }
 }
 
 
@@ -327,6 +422,23 @@ void Server::broadcastMessage(
         << sender->username
         << ":"
         << text;
+}
+
+void Server::sendToAll(const QByteArray &data)
+{
+    for(auto user : m_users)
+        user->socket->write(data);
+}
+
+void Server::sendToAll(PacketType pt, const QByteArray& packedData)
+{
+    Packet packet;
+    packet.type = pt;
+    packet.payload = packedData;
+
+    QByteArray bytes = packet.serialize();
+    for(auto user : m_users)
+        user->socket->write(bytes);
 }
 
 void Server::notifyEveryone(const QString &text)

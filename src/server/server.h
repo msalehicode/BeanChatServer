@@ -12,6 +12,8 @@
 #include "../models/user.h"
 #include "../models/channel.h"
 
+#include "../network/packets.h"
+
 class Server : public QObject
 {
     Q_OBJECT
@@ -46,6 +48,9 @@ public:
         User* sender,
         const QString& text);
 
+    void sendToAll(const QByteArray& data);
+    void sendToAll(PacketType pt, const QByteArray& dataToPack);
+
 
     void notifyEveryone(const QString& text);
 
@@ -55,34 +60,13 @@ public:
         const QString& password);
 
 
-    void printChannels()
-    {
-        qDebug() << "channels:";
-        for(Channel* channel: m_channels)
-        {
-            qDebug() << channel->id << " " << channel->name << " " << channel->password;
-        }
-    }
+    QByteArray buildServerState();
 
-    void printChannelWithUsersIn()
-    {
-        qDebug() << "channels:";
-        for(Channel* channel: m_channels)
-        {
-            qDebug() << channel->id << " " << channel->name << " " << channel->password;
-            for(User* c : channel->users)
-                qDebug() << "     " << c->username;
-        }
-    }
+    void printChannels();
 
-    void printUsers()
-    {
-        qDebug() << "users:";
-        for(User* user: m_users)
-        {
-            qDebug() << user->id << " " << user->username << " " << user->identity << " " << user->ip;
-        }
-    }
+    void printChannelWithUsersIn();
+
+    void printUsers();
 private slots:
     void onNewConnection();
 

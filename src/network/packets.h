@@ -36,7 +36,10 @@ enum class PacketType : quint16
     VideoData = 17,
 
     PingRequest = 18,
-    PingResponse = 19
+    PingResponse = 19,
+
+    RequestServerState = 20,
+    ServerState = 21
 };
 
 struct LoginRequestPacket
@@ -116,6 +119,27 @@ operator>>(QDataStream& in,
     in >> p.id
         >> p.username;
 
+    return in;
+}
+
+struct UserDisconnectedPacket
+{
+    quint64 id;
+};
+
+inline QDataStream&
+operator<<(QDataStream& out,
+           const UserDisconnectedPacket& p)
+{
+    out << p.id;
+    return out;
+}
+
+inline QDataStream&
+operator>>(QDataStream& in,
+           UserDisconnectedPacket& p)
+{
+    in >> p.id;
     return in;
 }
 
@@ -283,6 +307,110 @@ operator>>(QDataStream& in,
            SendMessagePacket& p)
 {
     in >> p.text;
+
+    return in;
+}
+
+
+struct ChannelInfo
+{
+    quint64 id;
+    QString name;
+    bool isLocked;
+    bool permanentChat;
+    bool temporaryChat;
+};
+
+inline QDataStream&
+operator<<(QDataStream& out,
+           const ChannelInfo& p)
+{
+    out << p.id
+        << p.name
+        << p.permanentChat
+        << p.temporaryChat
+        << p.isLocked;
+
+    return out;
+}
+
+inline QDataStream&
+operator>>(QDataStream& in,
+           ChannelInfo& p)
+{
+    in >> p.id
+        >> p.name
+        >> p.permanentChat
+        >> p.temporaryChat
+        >> p.isLocked;
+
+    return in;
+}
+
+
+struct UserInfo
+{
+    quint64 id;
+
+    QString username;
+
+    quint64 channelId;
+
+    bool muted;
+    bool deafened;
+};
+
+inline QDataStream&
+operator<<(QDataStream& out,
+           const UserInfo& p)
+{
+    out << p.id
+        << p.username
+        << p.channelId
+        << p.muted
+        << p.deafened;
+
+    return out;
+}
+
+inline QDataStream&
+operator>>(QDataStream& in,
+           UserInfo& p)
+{
+    in >> p.id
+        >> p.username
+        >> p.channelId
+        >> p.muted
+        >> p.deafened;
+
+    return in;
+}
+
+
+struct ServerStatePacket
+{
+    QList<ChannelInfo> channels;
+
+    QList<UserInfo> users;
+};
+
+
+inline QDataStream&
+operator<<(QDataStream& out,
+           const ServerStatePacket& p)
+{
+    out << p.channels
+        << p.users;
+
+    return out;
+}
+
+inline QDataStream&
+operator>>(QDataStream& in,
+           ServerStatePacket& p)
+{
+    in >> p.channels
+        >> p.users;
 
     return in;
 }

@@ -83,8 +83,7 @@ void ClientSession::onReadyRead()
     }
 }
 
-void ClientSession::handleLogin(
-    const QByteArray& payload)
+void ClientSession::handleLogin(const QByteArray& payload)
 {
     auto req =
         PacketHelpers::unpack<LoginRequestPacket>(
@@ -92,6 +91,10 @@ void ClientSession::handleLogin(
 
     qDebug()
         << "login user...";
+
+
+    if(req.username.isEmpty() || req.identity.isEmpty())
+        return;
 
     m_user =
         m_server->loginUser(
@@ -124,6 +127,15 @@ void ClientSession::processPacket(
 
     switch(packet.type)
     {
+    case PacketType::RequestServerState:
+    {
+        if(!m_user)
+            break;
+
+        sendPacket(
+            PacketType::ServerState,
+            m_server->buildServerState());
+    }
     case PacketType::LoginRequest:
     {
         handleLogin(
