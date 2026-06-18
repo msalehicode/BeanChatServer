@@ -102,19 +102,19 @@ void ClientSession::handleLogin(const QByteArray& payload)
             req.identity,
             m_socket);
 
-    LoginResponsePacket resp;
+    // LoginResponsePacket resp;
 
-    resp.accepted =
-        (m_user != nullptr);
+    // resp.accepted =
+    //     (m_user != nullptr);
 
-    resp.message =
-        resp.accepted
-            ? "OK"
-            : "Rejected";
+    // resp.message =
+    //     resp.accepted
+    //         ? "OK"
+    //         : "Rejected";
 
-    sendPacket(
-        PacketType::LoginResponse,
-        PacketHelpers::pack(resp));
+    // sendPacket(
+    //     PacketType::LoginResponse,
+    //     PacketHelpers::pack(resp));
 }
 
 void ClientSession::processPacket(

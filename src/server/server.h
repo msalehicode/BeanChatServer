@@ -49,8 +49,9 @@ public:
         const QString& text);
 
     void sendToAll(const QByteArray& data);
-    void sendToAll(PacketType pt, const QByteArray& dataToPack);
-
+    void sendToAll(PacketType pt, const QByteArray& packedData,
+                   User* exceptThis=nullptr, QByteArray exceptData=0);
+    void sendToUser(User* receiver, const QByteArray& packedData);
 
     void notifyEveryone(const QString& text);
 

@@ -71,6 +71,7 @@ operator>>(QDataStream& in,
 
 struct LoginResponsePacket
 {
+    int id;
     bool accepted;
     QString message;
 };
@@ -79,7 +80,8 @@ inline QDataStream&
 operator<<(QDataStream& out,
            const LoginResponsePacket& p)
 {
-    out << p.accepted
+    out << p.id
+        << p.accepted
         << p.message;
 
     return out;
@@ -89,7 +91,8 @@ inline QDataStream&
 operator>>(QDataStream& in,
            LoginResponsePacket& p)
 {
-    in >> p.accepted
+    in >> p.id
+        >> p.accepted
         >> p.message;
 
     return in;

@@ -73,48 +73,69 @@ User* Server::loginUser(
     const QString& identity,
     QTcpSocket* socket)
 {
-    auto user =
-        new User;
+    //set essential data from this user, if needed to ban
+    auto user = new User;
 
-    user->id =
-        m_nextUserId++;
+    user->identity = identity;
 
-    user->username =
-        username;
+    user->socket =socket;
 
-    user->identity =
-        identity;
+    user->ip =socket->peerAddress().toString();
 
-    user->socket =
-        socket;
 
-    user->ip =
-        socket->peerAddress()
-            .toString();
+    LoginResponsePacket resp;
+    resp.accepted = true;
+    resp.message = resp.accepted ? "OK" : "Rejected";
 
-    user->connectedSince =
-        QDateTime::currentSecsSinceEpoch();
+    if(resp.accepted)
+    {
+        user->id =
+            m_nextUserId++;
 
-    user->currentChannel =
-        m_channels.first();
+        user->username =
+            username;
 
-    user->currentChannel
-        ->users
-        .push_back(user);
+        user->connectedSince =
+            QDateTime::currentSecsSinceEpoch();
 
-    m_users.push_back(
-        user);
+        user->currentChannel =
+            m_channels.first();
 
-    qDebug()
-        << username
-        << "logged in";
+        user->currentChannel
+            ->users
+            .push_back(user);
 
-    UserConnectedPacket uc;
-    uc.id = user->id;
-    uc.username = user->username;
-    sendToAll(PacketType::UserConnected, PacketHelpers::pack(uc));
+        m_users.push_back(
+            user);
 
-    printUsers();
+        qDebug()
+            << username
+            << "logged in";
+
+        UserConnectedPacket uc;
+        uc.id = user->id;
+        uc.username = user->username;
+
+        LoginResponsePacket lrp;
+        lrp.id = user->id;
+        lrp.accepted=true;
+        lrp.message="logged in fine";
+        Packet packet;
+        packet.type = PacketType::LoginResponse;
+        packet.payload = PacketHelpers::pack(lrp);
+        QByteArray bytes = packet.serialize();
+
+
+        sendToAll(PacketType::UserConnected, PacketHelpers::pack(uc), user, bytes);
+
+        printUsers();
+    }
+    else
+    {
+        user->socket->write(PacketHelpers::pack(resp));
+        qDebug() << "an invalid login detected.";
+    }
+
 
     return user;
 }
@@ -424,21 +445,49 @@ void Server::broadcastMessage(
         << text;
 }
 
-void Server::sendToAll(const QByteArray &data)
-{
-    for(auto user : m_users)
-        user->socket->write(data);
-}
 
-void Server::sendToAll(PacketType pt, const QByteArray& packedData)
+
+void Server::sendToAll(PacketType pt, const QByteArray& packedData,
+                       User* exceptThis, QByteArray exceptData)
 {
     Packet packet;
     packet.type = pt;
     packet.payload = packedData;
 
     QByteArray bytes = packet.serialize();
-    for(auto user : m_users)
-        user->socket->write(bytes);
+    if(exceptThis==nullptr)
+    {
+        for(auto user : m_users)
+            user->socket->write(bytes);
+    }
+    else
+    {
+        for(auto user : m_users)
+        {
+            if(user->id == exceptThis->id)
+                user->socket->write(exceptData);
+            else
+                user->socket->write(bytes);
+        }
+    }
+
+}
+
+void Server::sendToUser(User *receiver, const QByteArray &packedData)
+{
+    if(!receiver)
+        return;
+
+    for(User* user : m_users)
+    {
+        if(user->id==receiver->id)
+        {
+            user->socket->write(packedData);
+            return;
+        }
+    }
+    qDebug() << "user not found to send .. id=" << receiver->id;
+    return;
 }
 
 void Server::notifyEveryone(const QString &text)
