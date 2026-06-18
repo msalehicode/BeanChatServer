@@ -14,6 +14,11 @@ public:
     QString username;
     QString identity;
 
+    QHostAddress udpAddress;
+    quint16 udpPort = 0;
+
+    bool udpRegistered = false;
+
     QString ip;
 
     qint64 connectedSince = 0;

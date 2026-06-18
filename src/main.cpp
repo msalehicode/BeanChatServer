@@ -23,7 +23,7 @@ int main(
 
     Server server;
 
-    if(!server.start(9987))
+    if(!server.start(9987,9988))
     {
         qCritical()
         << "Failed to start server";

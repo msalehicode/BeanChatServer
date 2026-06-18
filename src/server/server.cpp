@@ -29,7 +29,7 @@ Server::Server(
 }
 
 bool Server::start(
-    quint16 port)
+    quint16 port, quint16 udpPort)
 {
     connect(
         &m_server,
@@ -45,8 +45,22 @@ bool Server::start(
     }
 
     qDebug()
-        << "Listening on"
+        << "Listening on "
         << port;
+
+
+
+    m_udpServer =
+        new UdpServer(
+            this,
+            this);
+
+    m_udpServer->start(
+        udpPort);
+
+    qDebug()
+        << "udpvoice Listening on "
+        << udpPort;
 
     return true;
 }
@@ -247,6 +261,8 @@ bool Server::joinChannel(
         return false;
     }
 
+    quint64 userOldChannel = user->currentChannel->id;
+
     if(user->currentChannel)
     {
         user->currentChannel
@@ -262,13 +278,16 @@ bool Server::joinChannel(
 
     qDebug()
         << user->username
-        << "joined"
+        << "has left "
+        << userOldChannel
+        << " and joined"
         << target->name;
 
 
     UserJoinedChannelPacket ujs;
     ujs.channelId = target->id;
     ujs.userId = user->id;
+    ujs.oldChannelId = userOldChannel;
 
     Packet packet;
     packet.type = PacketType::UserJoinedChannel;
@@ -280,6 +299,11 @@ bool Server::joinChannel(
 
 
     return true;
+}
+
+QList<User *> Server::users() const
+{
+    return m_users;
 }
 
 QByteArray Server::buildServerState()

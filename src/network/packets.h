@@ -31,7 +31,7 @@ enum class PacketType : quint16
 
     ChannelDeleted = 15,
 
-    VoiceData = 16,
+    VoiceDataOld = 16,
 
     VideoData = 17,
 
@@ -39,7 +39,11 @@ enum class PacketType : quint16
     PingResponse = 19,
 
     RequestServerState = 20,
-    ServerState = 21
+    ServerState = 21,
+
+
+    UdpRegister = 100,
+    VoiceData = 101
 };
 
 struct LoginRequestPacket
@@ -237,6 +241,7 @@ struct UserJoinedChannelPacket
 {
     quint64 userId;
     quint64 channelId;
+    quint64 oldChannelId;
 };
 
 inline QDataStream&
@@ -244,7 +249,8 @@ operator<<(QDataStream& out,
            const UserJoinedChannelPacket& p)
 {
     out << p.userId
-        << p.channelId;
+        << p.channelId
+        << p.oldChannelId;
 
     return out;
 }
@@ -254,7 +260,8 @@ operator>>(QDataStream& in,
            UserJoinedChannelPacket& p)
 {
     in >> p.userId
-        >> p.channelId;
+        >> p.channelId
+        >> p.oldChannelId;
 
     return in;
 }

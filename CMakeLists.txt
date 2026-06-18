@@ -24,6 +24,8 @@ add_executable(BeanChatServer
   src/models/database.h src/models/database.cpp
   src/models/user.h
   src/models/channel.h
+  src/network/voicepackets.h src/network/voicepackets.cpp
+  src/network/udpserver.h src/network/udpserver.cpp
 
 )
 target_link_libraries(BeanChatServer Qt6::Core Qt6::Network Qt6::Sql)

@@ -14,6 +14,8 @@
 
 #include "../network/packets.h"
 
+#include "../network/udpserver.h"
+
 class Server : public QObject
 {
     Q_OBJECT
@@ -23,7 +25,7 @@ public:
         QObject* parent = nullptr);
 
     bool start(
-        quint16 port);
+        quint16 port, quint16 udpPort);
 
     User* loginUser(
         const QString& username,
@@ -60,6 +62,7 @@ public:
         quint64 channelId,
         const QString& password);
 
+    QList<User*> users() const;
 
     QByteArray buildServerState();
 
@@ -79,4 +82,6 @@ private:
     QList<User*> m_users;
 
     QList<Channel*> m_channels;
+
+    UdpServer* m_udpServer;
 };
