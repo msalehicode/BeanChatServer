@@ -67,9 +67,9 @@ void UdpServer::onReadyRead()
 
         stream >> packetType;
 
-        qDebug()
-            << "UDP TYPE:"
-            << packetType;
+        // qDebug()
+            // << "UDP TYPE:"
+            // << packetType;
 
         switch(packetType)
         {
@@ -108,8 +108,7 @@ void UdpServer::processRegister(
 
     if(!user)
     {
-        qDebug()
-        << "UDP register failed";
+        // qDebug() << "UDP register failed";
 
         return;
     }
@@ -129,18 +128,18 @@ void UdpServer::processRegister(
 }
 
 void UdpServer::processVoice(
-    const QNetworkDatagram&,
+    const QNetworkDatagram& datagram,
     QDataStream& stream)
 {
     VoicePacket packet;
 
     stream >> packet;
 
-    qDebug()
-        << "VOICE:"
-        << packet.senderId
-        << packet.sequence
-        << packet.audioData.size();
+    // qDebug()
+    //     << "VOICE:"
+    //     << packet.senderId
+    //     << packet.sequence
+    //     << packet.audioData.size();
 
     auto sender =
         findUser(
@@ -148,19 +147,24 @@ void UdpServer::processVoice(
 
     if(!sender)
     {
-        qDebug()
-        << "Voice sender not found";
-
+        // qDebug() << "Voice sender not found";
         return;
     }
 
     if(!sender->currentChannel)
     {
-        qDebug()
-        << "Sender has no channel";
-
+        // qDebug() << "Sender has no channel";
         return;
     }
+
+
+    //check if senderId's ip:port matches with that user?
+    if(datagram.senderAddress() != sender->udpAddress || datagram.senderPort() != sender->udpPort)
+    {
+        qDebug() << "userId doesnt match with senders ip:port";
+        return;
+    }
+
 
     auto channel =
         sender->currentChannel;
@@ -174,8 +178,7 @@ void UdpServer::processVoice(
     out << quint16(101);
     out << packet;
 
-    for(auto user :
-         channel->users)
+    for(auto user : channel->users)
     {
         if(user == sender)
             continue;
@@ -189,10 +192,6 @@ void UdpServer::processVoice(
                 user->udpAddress,
                 user->udpPort);
 
-        qDebug()
-            << "Forwarded"
-            << bytes
-            << "bytes to"
-            << user->username;
+        // qDebug() << "Forwarded" << bytes << "bytes to" << user->username;
     }
 }

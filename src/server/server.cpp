@@ -247,7 +247,7 @@ bool Server::joinChannel(
     {
         qDebug()
         << "channel not found";
-        broadcastMessage(user,"channel not found.");
+        // broadcastMessage(user,"channel not found.");
 
         return false;
     }
@@ -257,7 +257,7 @@ bool Server::joinChannel(
     {
         qDebug()
         << "wrong password";
-        broadcastMessage(user,"wrong password.");
+        // broadcastMessage(user,"wrong password.");
         return false;
     }
 
@@ -427,8 +427,8 @@ void Server::broadcastMessage(
     packet.senderId =
         sender->id;
 
-    packet.channelId =
-        channel->id;
+    // packet.channelId =
+    //     channel->id;
 
     packet.text =
         text;
@@ -467,6 +467,56 @@ void Server::broadcastMessage(
         << sender->username
         << ":"
         << text;
+}
+
+void Server::broadcastMessage(User *sender, SendMessagePacket &message)
+{
+    if(!sender)
+        return;
+
+    auto channel =
+        sender->currentChannel;
+
+    if(!channel)
+        return;
+
+
+    //convert send message to chatmessage.
+    ChatMessagePacket msg;
+
+
+    msg.senderId = sender->id;
+    msg.messageId = 0; //later change this -------------------------------------------
+    msg.text = message.text;
+    msg.type = static_cast<ChatMessagePacket::Type>(message.type);
+    msg.mediaPath = message.mediaPath;
+    // message.channelId = channel->id;
+    msg.timestamp = QDateTime::currentDateTime();
+
+
+    QByteArray payload = PacketHelpers::pack(msg);
+    Packet networkPacket;
+    networkPacket.type = PacketType::ChatMessage;
+    networkPacket.payload = payload;
+    QByteArray bytes = networkPacket.serialize();
+
+    for(auto user : channel->users)
+    {
+        user->socket->write(bytes);
+    }
+
+    // if(channel->permanentChat)
+    // {
+    //     saveMessage(
+    //         channel->id,
+    //         sender->id,
+    //         text);
+    // }
+
+    qDebug()
+        << sender->username
+        << ":"
+        << message.text;
 }
 
 

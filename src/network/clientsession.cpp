@@ -180,16 +180,16 @@ void ClientSession::processPacket(
 
     case PacketType::ChatMessage:
     {
-        auto msg =
-            PacketHelpers::unpack<ChatMessagePacket>(
-                packet.payload);
+        auto msg = PacketHelpers::unpack<SendMessagePacket>(packet.payload);
 
-        m_server->broadcastMessage(
-            m_user,
-            msg.text);
+        qDebug() << "message received:"
+                 << " text:" << msg.text
+                 << " type:" << msg.type
+                 << " mediapath:" << msg.mediaPath;
+
+        m_server->broadcastMessage(m_user,msg);
     }
 
-    break;
     break;
 
     default:

@@ -50,6 +50,8 @@ public:
         User* sender,
         const QString& text);
 
+    void broadcastMessage(User* sender, SendMessagePacket &message);
+
     void sendToAll(const QByteArray& data);
     void sendToAll(PacketType pt, const QByteArray& packedData,
                    User* exceptThis=nullptr, QByteArray exceptData=0);

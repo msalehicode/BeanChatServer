@@ -2,6 +2,7 @@
 
 #include <QString>
 #include <QDataStream>
+#include <QDateTime>
 
 enum class PacketType : quint16
 {
@@ -266,60 +267,60 @@ operator>>(QDataStream& in,
     return in;
 }
 
-struct ChatMessagePacket
-{
-    quint64 senderId;
+// struct ChatMessagePacket
+// {
+//     quint64 senderId;
 
-    quint64 channelId;
+//     quint64 channelId;
 
-    QString text;
-};
+//     QString text;
+// };
 
-inline QDataStream&
-operator<<(QDataStream& out,
-           const ChatMessagePacket& p)
-{
-    out << p.senderId
-        << p.channelId
-        << p.text;
+// inline QDataStream&
+// operator<<(QDataStream& out,
+//            const ChatMessagePacket& p)
+// {
+//     out << p.senderId
+//         << p.channelId
+//         << p.text;
 
-    return out;
-}
+//     return out;
+// }
 
-inline QDataStream&
-operator>>(QDataStream& in,
-           ChatMessagePacket& p)
-{
-    in >> p.senderId
-        >> p.channelId
-        >> p.text;
+// inline QDataStream&
+// operator>>(QDataStream& in,
+//            ChatMessagePacket& p)
+// {
+//     in >> p.senderId
+//         >> p.channelId
+//         >> p.text;
 
-    return in;
-}
+//     return in;
+// }
 
 
-struct SendMessagePacket
-{
-    QString text;
-};
+// struct SendMessagePacket
+// {
+//     QString text;
+// };
 
-inline QDataStream&
-operator<<(QDataStream& out,
-           const SendMessagePacket& p)
-{
-    out << p.text;
+// inline QDataStream&
+// operator<<(QDataStream& out,
+//            const SendMessagePacket& p)
+// {
+//     out << p.text;
 
-    return out;
-}
+//     return out;
+// }
 
-inline QDataStream&
-operator>>(QDataStream& in,
-           SendMessagePacket& p)
-{
-    in >> p.text;
+// inline QDataStream&
+// operator>>(QDataStream& in,
+//            SendMessagePacket& p)
+// {
+//     in >> p.text;
 
-    return in;
-}
+//     return in;
+// }
 
 
 struct ChannelInfo
@@ -421,6 +422,108 @@ operator>>(QDataStream& in,
 {
     in >> p.channels
         >> p.users;
+
+    return in;
+}
+
+
+
+struct SendMessagePacket
+{
+    enum Type
+    {
+        Text,
+        Image,
+        Video,
+        File,
+        Link,
+        Emoji
+    };
+
+    QString text;
+    Type type;
+    QString mediaPath;
+};
+
+inline QDataStream&
+operator<<(QDataStream& out,
+           const SendMessagePacket& p)
+{
+    out << p.text
+        << p.type
+        << p.mediaPath;
+
+
+    return out;
+}
+
+inline QDataStream&
+operator>>(QDataStream& in,
+           SendMessagePacket& p)
+{
+    in  >> p.text
+        >> p.type
+        >> p.mediaPath;
+
+    return in;
+}
+
+
+
+
+
+struct ChatMessagePacket
+{
+    enum Type
+    {
+        Text,
+        Image,
+        Video,
+        File,
+        Link,
+        Emoji
+    };
+
+    //fill by server
+    quint64 messageId;
+    quint64 senderId;
+    // quint64 channelId;
+    QDateTime timestamp=QDateTime::currentDateTime();
+
+
+    //fill by client
+    QString text="";
+    Type type = Text;
+    QString mediaPath="";
+};
+
+inline QDataStream&
+operator<<(QDataStream& out,
+           const ChatMessagePacket& p)
+{
+    out << p.messageId
+        << p.senderId
+        // << p.channelId
+        << p.text
+        << p.type
+        << p.mediaPath
+        << p.timestamp;
+
+
+    return out;
+}
+
+inline QDataStream&
+operator>>(QDataStream& in,
+           ChatMessagePacket& p)
+{
+    in >> p.messageId
+        >> p.senderId
+        // >> p.channelId
+        >> p.text
+        >> p.type
+        >> p.mediaPath
+        >> p.timestamp;
 
     return in;
 }
