@@ -54,3 +54,36 @@ operator>>(QDataStream& in,
 
     return in;
 }
+
+
+
+struct VideoPacket
+{
+    quint64 senderId=0;
+
+    quint32 sequence=0;
+
+    QByteArray videoData;
+};
+
+inline QDataStream&
+operator<<(QDataStream& out,
+           const VideoPacket& p)
+{
+    out << p.senderId
+        << p.sequence
+        << p.videoData;
+
+    return out;
+}
+
+inline QDataStream&
+operator>>(QDataStream& in,
+           VideoPacket& p)
+{
+    in >> p.senderId
+        >> p.sequence
+        >> p.videoData;
+
+    return in;
+}

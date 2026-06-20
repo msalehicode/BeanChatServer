@@ -143,6 +143,21 @@ void ClientSession::processPacket(
     }
     break;
 
+    case PacketType::UserCameraClosed:
+    case PacketType::UserCameraOpened:
+    case PacketType::UserMuted:
+    case PacketType::UserUnmuted:
+    case PacketType::UserDeafened:
+    case PacketType::UserUndeafened:
+
+    {
+        auto resp =
+            PacketHelpers::unpack<UserStatusChangedPacket>(
+                packet.payload);
+
+        m_server->changeUserStatus(packet.type, m_socket);
+    }break;
+
     case PacketType::CreateChannel:
     {
         auto req =

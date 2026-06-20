@@ -32,7 +32,7 @@ bool UdpServer::start(
             port);
 
     qDebug()
-        << "udpvoice Listening on"
+        << "udpVoice and udpVideo Listening on"
         << port;
 
     return ok;
@@ -81,6 +81,12 @@ void UdpServer::onReadyRead()
 
         case 101:
             processVoice(
+                datagram,
+                stream);
+            break;
+
+        case 102:
+            processVideo(
                 datagram,
                 stream);
             break;
@@ -141,9 +147,7 @@ void UdpServer::processVoice(
     //     << packet.sequence
     //     << packet.audioData.size();
 
-    auto sender =
-        findUser(
-            packet.senderId);
+    auto sender = findUser(packet.senderId);
 
     if(!sender)
     {
@@ -193,5 +197,74 @@ void UdpServer::processVoice(
                 user->udpPort);
 
         // qDebug() << "Forwarded" << bytes << "bytes to" << user->username;
+    }
+}
+
+void UdpServer::processVideo(const QNetworkDatagram &datagram, QDataStream &stream)
+{
+    VideoPacket packet;
+
+    stream >> packet;
+
+    // qDebug()
+    //     << "Video:"
+    //     << packet.senderId
+    //     << packet.sequence
+    //     << packet.videoData.size();
+
+    auto sender =
+        findUser(
+            packet.senderId);
+
+    if(!sender)
+    {
+        qDebug() << "video sender not found";
+        return;
+    }
+
+    if(!sender->currentChannel)
+    {
+        qDebug() << "Sender has no channel";
+        return;
+    }
+
+
+    //check if senderId's ip:port matches with that user?
+    if(datagram.senderAddress() != sender->udpAddress || datagram.senderPort() != sender->udpPort)
+    {
+        qDebug() << "userId doesnt match with senders ip:port";
+        return;
+    }
+
+
+    auto channel = sender->currentChannel;
+
+    if(!channel)
+        return;
+
+    QByteArray outData;
+
+    QDataStream out(
+        &outData,
+        QIODevice::WriteOnly);
+
+    out << quint16(102);
+    out << packet;
+
+    for(auto user : channel->users)
+    {
+        if(user == sender)
+            continue;
+
+        if(!user->udpRegistered)
+            continue;
+
+        qint64 bytes =
+            m_socket.writeDatagram(
+                outData,
+                user->udpAddress,
+                user->udpPort);
+
+        // qDebug() << "Forwarded video" << bytes << "bytes to" << user->username;
     }
 }

@@ -32,6 +32,8 @@ public:
         const QString& identity,
         QTcpSocket* socket);
 
+    User* findUser(QTcpSocket* socket);
+
     void removeUser(
         User* user);
 
@@ -40,6 +42,8 @@ public:
         const QString& password,
         bool permanentChat,
         bool temporaryChat);
+
+    void changeUserStatus(PacketType type, QTcpSocket* socket);
 
     void saveMessage(
         quint64 channelId,
@@ -52,7 +56,6 @@ public:
 
     void broadcastMessage(User* sender, SendMessagePacket &message);
 
-    void sendToAll(const QByteArray& data);
     void sendToAll(PacketType pt, const QByteArray& packedData,
                    User* exceptThis=nullptr, QByteArray exceptData=0);
     void sendToUser(User* receiver, const QByteArray& packedData);

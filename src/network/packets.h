@@ -8,44 +8,80 @@ enum class PacketType : quint16
 {
     Invalid = 0,
 
-    LoginRequest = 1,
-    LoginResponse = 2,
+    LoginRequest,
+    LoginResponse,
 
-    UserConnected = 3,
-    UserDisconnected = 4,
+    UserConnected,
+    UserDisconnected,
 
-    CreateChannel = 5,
-    JoinChannel = 6,
+    CreateChannel,
+    JoinChannel,
 
-    ChannelCreated = 7,
-    UserJoinedChannel = 8,
+    ChannelCreated,
+    UserJoinedChannel,
 
-    ChatMessage = 9,
+    ChatMessage,
 
-    UserMuted = 10,
-    UserUnmuted = 11,
+    UserMuted ,
+    UserUnmuted ,
 
-    UserDeafened = 12,
-    UserUndeafened = 13,
+    UserDeafened ,
+    UserUndeafened ,
 
-    UserMoved = 14,
+    UserCameraOpened,
+    UserCameraClosed,
 
-    ChannelDeleted = 15,
+    UserMoved,
 
-    VoiceDataOld = 16,
+    ChannelDeleted,
 
-    VideoData = 17,
+    VoiceDataOld,
 
-    PingRequest = 18,
-    PingResponse = 19,
+    VideoData,
 
-    RequestServerState = 20,
-    ServerState = 21,
+    PingRequest,
+    PingResponse,
+
+    RequestServerState,
+    ServerState,
 
 
     UdpRegister = 100,
     VoiceData = 101
 };
+
+struct UserStatusChangedPacket
+{
+    quint64 userId;
+    quint64 userChannelId;
+    bool status; //status type would set by PacketType::UserMuted or ..
+};
+
+inline QDataStream&
+operator<<(QDataStream& out,
+           const UserStatusChangedPacket& p)
+{
+    out << p.userId
+        << p.userChannelId
+        << p.status;
+
+    return out;
+}
+
+inline QDataStream&
+operator>>(QDataStream& in,
+           UserStatusChangedPacket& p)
+{
+    in >> p.userId
+        >> p.userChannelId
+        >> p.status;
+
+    return in;
+}
+
+
+
+
 
 struct LoginRequestPacket
 {
@@ -108,6 +144,9 @@ struct UserConnectedPacket
 {
     quint64 id;
     QString username;
+    bool muted=false;
+    bool deafened=false;
+    bool camera=false;
 };
 
 inline QDataStream&
@@ -115,7 +154,10 @@ operator<<(QDataStream& out,
            const UserConnectedPacket& p)
 {
     out << p.id
-        << p.username;
+        << p.username
+        << p.muted
+        << p.deafened
+        << p.camera;
 
     return out;
 }
@@ -125,7 +167,10 @@ operator>>(QDataStream& in,
            UserConnectedPacket& p)
 {
     in >> p.id
-        >> p.username;
+        >> p.username
+        >> p.muted
+        >> p.deafened
+        >> p.camera;
 
     return in;
 }
@@ -367,8 +412,9 @@ struct UserInfo
 
     quint64 channelId;
 
-    bool muted;
-    bool deafened;
+    bool muted=false;
+    bool deafened=false;
+    bool camera=false;
 };
 
 inline QDataStream&
@@ -379,7 +425,8 @@ operator<<(QDataStream& out,
         << p.username
         << p.channelId
         << p.muted
-        << p.deafened;
+        << p.deafened
+        << p.camera;
 
     return out;
 }
@@ -392,7 +439,8 @@ operator>>(QDataStream& in,
         >> p.username
         >> p.channelId
         >> p.muted
-        >> p.deafened;
+        >> p.deafened
+        >> p.camera;
 
     return in;
 }
@@ -527,4 +575,3 @@ operator>>(QDataStream& in,
 
     return in;
 }
-

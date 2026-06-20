@@ -45,7 +45,7 @@ bool Server::start(
     }
 
     qDebug()
-        << "Listening on "
+        << "TCP Listening on "
         << port;
 
 
@@ -57,10 +57,6 @@ bool Server::start(
 
     m_udpServer->start(
         udpPort);
-
-    qDebug()
-        << "udpvoice Listening on "
-        << udpPort;
 
     return true;
 }
@@ -154,6 +150,19 @@ User* Server::loginUser(
     return user;
 }
 
+User *Server::findUser(QTcpSocket *socket)
+{
+    for(User* usr : m_users)
+    {
+        if(usr->socket->peerAddress().toString() == socket->peerAddress().toString()
+            && usr->socket->peerPort() == socket->peerPort())
+        {
+            return usr;
+        }
+    }
+    return nullptr;
+}
+
 void Server::removeUser(
     User* user)
 {
@@ -220,6 +229,54 @@ Channel* Server::createChannel(
     sendToAll(PacketType::ChannelCreated, PacketHelpers::pack(cc));
 
     return channel;
+}
+
+void Server::changeUserStatus(PacketType type , QTcpSocket *socket)
+{
+    User* usr = findUser(socket);
+    if(usr)
+    {
+        UserStatusChangedPacket us;
+        us.userId=usr->id;
+        us.userChannelId=usr->currentChannel->id;
+
+        switch(type)
+        {
+            case PacketType::UserCameraClosed:
+                us.status = false;
+                usr->camera = false;
+                break;
+            case PacketType::UserCameraOpened:
+                us.status = true;
+                usr->camera = true;
+                break;
+
+            case PacketType::UserMuted:
+                us.status=true;
+                usr->muted=true;
+                break;
+            case PacketType::UserUnmuted:
+                us.status=false;
+                usr->muted=false;
+                break;
+
+            case PacketType::UserDeafened:
+                us.status=true;
+                usr->deafened=true;
+                qDebug()<<"def statu";
+                break;
+            case PacketType::UserUndeafened:
+                us.status=false;
+                usr->deafened=false;
+                qDebug()<<"undef statu";
+                break;
+            default:
+                qDebug() << "undefined type for changeUserStatus..";
+                return;
+        }
+
+        sendToAll(type, PacketHelpers::pack(us));
+    }
 }
 
 bool Server::joinChannel(
@@ -347,6 +404,10 @@ QByteArray Server::buildServerState()
 
         info.deafened =
             user->deafened;
+
+        info.camera =
+            user->camera;
+        qDebug() << "creating state, user " << info.username << " camera is " << info.camera;
 
         state.users.push_back(
             info);

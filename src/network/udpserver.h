@@ -29,6 +29,10 @@ private:
         const QNetworkDatagram& datagram,
         QDataStream& stream);
 
+    void processVideo(
+        const QNetworkDatagram& datagram,
+        QDataStream& stream);
+
     User* findUser(
         quint64 userId);
 

@@ -25,6 +25,7 @@ public:
 
     bool muted = false;
     bool deafened = false;
+    bool camera = false;
 
     int ping = 0;
     float packetLoss = 0.0f;
