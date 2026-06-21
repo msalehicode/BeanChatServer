@@ -286,7 +286,7 @@ operator>>(QDataStream& in,
 struct UserJoinedChannelPacket
 {
     quint64 userId;
-    quint64 channelId;
+    quint64 channelId=-1;
     quint64 oldChannelId;
 };
 

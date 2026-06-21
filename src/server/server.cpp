@@ -108,12 +108,12 @@ User* Server::loginUser(
         user->connectedSince =
             QDateTime::currentSecsSinceEpoch();
 
-        user->currentChannel =
-            m_channels.first();
-
-        user->currentChannel
-            ->users
-            .push_back(user);
+        //dont set a channel to user.
+        // user->currentChannel =
+        //     m_channels.first();
+        // user->currentChannel
+        //     ->users
+        //     .push_back(user);
 
         m_users.push_back(
             user);
@@ -287,14 +287,11 @@ bool Server::joinChannel(
     Channel* target =
         nullptr;
 
-    for(auto channel :
-         m_channels)
+    for(auto channel : m_channels)
     {
-        if(channel->id
-            == channelId)
+        if(channel->id == channelId)
         {
-            target =
-                channel;
+            target = channel;
 
             break;
         }
@@ -318,20 +315,25 @@ bool Server::joinChannel(
         return false;
     }
 
-    quint64 userOldChannel = user->currentChannel->id;
+    //check if user had a current channel, then remove him from that channel
+    quint64 userOldChannel=-1;
 
     if(user->currentChannel)
     {
-        user->currentChannel
-            ->users
-            .removeAll(user);
+        userOldChannel = user->currentChannel->id;
+
+        if(user->currentChannel)
+        {
+            user->currentChannel
+                ->users
+                .removeAll(user);
+        }
+
     }
 
-    target->users.push_back(
-        user);
+    target->users.push_back(user);
 
-    user->currentChannel =
-        target;
+    user->currentChannel = target;
 
     qDebug()
         << user->username
@@ -339,7 +341,6 @@ bool Server::joinChannel(
         << userOldChannel
         << " and joined"
         << target->name;
-
 
     UserJoinedChannelPacket ujs;
     ujs.channelId = target->id;
