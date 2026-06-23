@@ -261,6 +261,7 @@ struct ChannelCreatedPacket
 {
     quint64 id;
     QString name;
+    bool isLocked=false;
 };
 
 inline QDataStream&

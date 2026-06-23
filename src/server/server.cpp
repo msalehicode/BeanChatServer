@@ -226,6 +226,10 @@ Channel* Server::createChannel(
     ChannelCreatedPacket cc;
     cc.id = channel->id;
     cc.name = channel->name;
+
+    if(!password.isNull())
+        cc.isLocked=true;
+
     sendToAll(PacketType::ChannelCreated, PacketHelpers::pack(cc));
 
     return channel;
@@ -374,6 +378,7 @@ QByteArray Server::buildServerState()
 
         info.id = channel->id;
         info.name = channel->name;
+        info.isLocked = (channel->password.isNull() ? false : true);
 
         info.permanentChat =
             channel->permanentChat;
