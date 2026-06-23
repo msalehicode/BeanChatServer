@@ -30,8 +30,28 @@ add_executable(BeanChatServer
 )
 target_link_libraries(BeanChatServer Qt6::Core Qt6::Network Qt6::Sql)
 
+# for deploy, to tell where load libraries not system just ../lib, because on runtime it asks for library Qt6Network.so.6!
+set_target_properties(BeanChatServer PROPERTIES
+    BUILD_RPATH "\$ORIGIN/../lib"
+    INSTALL_RPATH "\$ORIGIN/../lib"
+)
+
+
 include(GNUInstallDirs)
 install(TARGETS BeanChatServer
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+
+
+
+
+
+# to deploy
+qt_generate_deploy_app_script(
+    TARGET BeanChatServer
+    OUTPUT_SCRIPT deploy_script
+    NO_UNSUPPORTED_PLATFORM_ERROR
+)
+install(SCRIPT ${deploy_script})
+
