@@ -78,32 +78,39 @@ void Server::onNewConnection()
     }
 }
 
-User* Server::loginUser(
-    const QString& username,
-    const QString& identity,
+UserModel* Server::loginUser(
+    const LoginRequestPacket& req,
     QTcpSocket* socket)
 {
     //set essential data from this user, if needed to ban
-    auto user = new User;
+    auto user = new UserModel;
 
-    user->identity = identity;
+    user->identity = req.identity;
 
-    user->socket =socket;
+    user->socket = socket;
 
     user->ip =socket->peerAddress().toString();
-
+    user->port =socket->peerPort();
+    user->appVersion = req.appVersion;
+    user->buildType = req.buildType;
+    user->machineId = req.machineId;
+    user->machineName = req.machineName;
+    user->osName = req.osName;
+    user->osVersion = req.osVersion;
 
     LoginResponsePacket resp;
+
+
+    //check user veriosn compatibility?
+    //code here
+
     resp.accepted = true;
     resp.message = resp.accepted ? "OK" : "Rejected";
 
     if(resp.accepted)
     {
-        user->id =
-            m_nextUserId++;
-
-        user->username =
-            username;
+        user->id =m_nextUserId++;
+        user->username = req.username;
 
         user->connectedSince =
             QDateTime::currentSecsSinceEpoch();
@@ -119,12 +126,17 @@ User* Server::loginUser(
             user);
 
         qDebug()
-            << username
+            << req.username
             << "logged in";
 
         UserConnectedPacket uc;
         uc.id = user->id;
         uc.username = user->username;
+        uc.appVersion = user->appVersion;
+        uc.buildType = user->buildType;
+        uc.osName = user->osName;
+        uc.osVersion = user->osVersion;
+        qDebug() << "user report his system info: " <<  uc.appVersion << "-" << uc.buildType << "-" << uc.osName << "-" << uc.osVersion;
 
         LoginResponsePacket lrp;
         lrp.id = user->id;
@@ -150,9 +162,9 @@ User* Server::loginUser(
     return user;
 }
 
-User *Server::findUser(QTcpSocket *socket)
+UserModel *Server::findUser(QTcpSocket *socket)
 {
-    for(User* usr : m_users)
+    for(UserModel* usr : m_users)
     {
         if(usr->socket->peerAddress().toString() == socket->peerAddress().toString()
             && usr->socket->peerPort() == socket->peerPort())
@@ -164,7 +176,7 @@ User *Server::findUser(QTcpSocket *socket)
 }
 
 void Server::removeUser(
-    User* user)
+    UserModel* user)
 {
     if(!user)
         return;
@@ -237,7 +249,7 @@ Channel* Server::createChannel(
 
 void Server::changeUserStatus(PacketType type , QTcpSocket *socket)
 {
-    User* usr = findUser(socket);
+    UserModel* usr = findUser(socket);
     if(usr)
     {
         UserStatusChangedPacket us;
@@ -284,7 +296,7 @@ void Server::changeUserStatus(PacketType type , QTcpSocket *socket)
 }
 
 bool Server::joinChannel(
-    User* user,
+    UserModel* user,
     quint64 channelId,
     const QString& password)
 {
@@ -363,7 +375,7 @@ bool Server::joinChannel(
     return true;
 }
 
-QList<User *> Server::users() const
+QList<UserModel *> Server::users() const
 {
     return m_users;
 }
@@ -413,7 +425,17 @@ QByteArray Server::buildServerState()
 
         info.camera =
             user->camera;
+
+
+        //fill some basic info of user's system to other users.
+        info.appVersion =user->appVersion;
+        info.buildType = user->buildType;
+        info.osName= user->osName;
+        info.osVersion = user->osVersion;
+
         qDebug() << "creating state, user " << info.username << " camera is " << info.camera;
+
+
 
         state.users.push_back(
             info);
@@ -437,7 +459,7 @@ void Server::printChannelWithUsersIn()
     for(Channel* channel: m_channels)
     {
         qDebug() << channel->id << " " << channel->name << " " << channel->password;
-        for(User* c : channel->users)
+        for(UserModel* c : channel->users)
             qDebug() << "     " << c->username;
     }
 }
@@ -445,7 +467,7 @@ void Server::printChannelWithUsersIn()
 void Server::printUsers()
 {
     qDebug() << "users:";
-    for(User* user: m_users)
+    for(UserModel* user: m_users)
     {
         qDebug() << user->id << " " << user->username << " " << user->identity << " " << user->ip;
     }
@@ -477,7 +499,7 @@ void Server::saveMessage(
 }
 
 void Server::broadcastMessage(
-    User* sender,
+    UserModel* sender,
     const QString& text)
 {
     if(!sender)
@@ -536,7 +558,7 @@ void Server::broadcastMessage(
         << text;
 }
 
-void Server::broadcastMessage(User *sender, SendMessagePacket &message)
+void Server::broadcastMessage(UserModel *sender, SendMessagePacket &message)
 {
     if(!sender)
         return;
@@ -589,7 +611,7 @@ void Server::broadcastMessage(User *sender, SendMessagePacket &message)
 
 
 void Server::sendToAll(PacketType pt, const QByteArray& packedData,
-                       User* exceptThis, QByteArray exceptData)
+                       UserModel* exceptThis, QByteArray exceptData)
 {
     Packet packet;
     packet.type = pt;
@@ -614,12 +636,12 @@ void Server::sendToAll(PacketType pt, const QByteArray& packedData,
 
 }
 
-void Server::sendToUser(User *receiver, const QByteArray &packedData)
+void Server::sendToUser(UserModel *receiver, const QByteArray &packedData)
 {
     if(!receiver)
         return;
 
-    for(User* user : m_users)
+    for(UserModel* user : m_users)
     {
         if(user->id==receiver->id)
         {

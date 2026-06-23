@@ -4,7 +4,7 @@
 #include <QUdpSocket>
 
 class Server;
-class User;
+class UserModel;
 
 class UdpServer : public QObject
 {
@@ -33,7 +33,7 @@ private:
         const QNetworkDatagram& datagram,
         QDataStream& stream);
 
-    User* findUser(
+    UserModel* findUser(
         quint64 userId);
 
 private:

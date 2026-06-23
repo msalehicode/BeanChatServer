@@ -87,6 +87,18 @@ struct LoginRequestPacket
 {
     QString username;
     QString identity;
+
+    // Client information
+    QString appVersion;      // "1.2.5"
+    QString buildType;       // "Release", "Debug"
+
+    // Operating system
+    QString osName;          // "Windows", "Linux", "macOS"
+    QString osVersion;       // "11", "Ubuntu 24.04"
+
+    // Hardware / machine
+    QString machineName;     // Computer hostname
+    QString machineId;       // Stable generated ID
 };
 
 inline QDataStream&
@@ -94,7 +106,13 @@ operator<<(QDataStream& out,
            const LoginRequestPacket& p)
 {
     out << p.username
-        << p.identity;
+        << p.identity
+        << p.appVersion
+        << p.buildType
+        << p.osName
+        << p.osVersion
+        << p.machineName
+        << p.machineId;
 
     return out;
 }
@@ -104,7 +122,13 @@ operator>>(QDataStream& in,
            LoginRequestPacket& p)
 {
     in >> p.username
-        >> p.identity;
+        >> p.identity
+        >> p.appVersion
+        >> p.buildType
+        >> p.osName
+        >> p.osVersion
+        >> p.machineName
+        >> p.machineId;
 
     return in;
 }
@@ -147,6 +171,15 @@ struct UserConnectedPacket
     bool muted=false;
     bool deafened=false;
     bool camera=false;
+
+    // Client information
+    QString appVersion;      // "1.2.5"
+    QString buildType;       // "Release", "Debug"
+
+    // Operating system
+    QString osName;          // "Windows", "Linux", "macOS"
+    QString osVersion;       // "11", "Ubuntu 24.04"
+
 };
 
 inline QDataStream&
@@ -157,7 +190,11 @@ operator<<(QDataStream& out,
         << p.username
         << p.muted
         << p.deafened
-        << p.camera;
+        << p.camera
+        << p.appVersion
+        << p.buildType
+        << p.osName
+        << p.osVersion;
 
     return out;
 }
@@ -170,7 +207,11 @@ operator>>(QDataStream& in,
         >> p.username
         >> p.muted
         >> p.deafened
-        >> p.camera;
+        >> p.camera
+        >> p.appVersion
+        >> p.buildType
+        >> p.osName
+        >> p.osVersion;
 
     return in;
 }
@@ -413,11 +454,21 @@ struct UserInfo
 
     QString username;
 
+
     quint64 channelId;
 
     bool muted=false;
     bool deafened=false;
     bool camera=false;
+
+
+    // Client information
+    QString appVersion;      // "1.2.5"
+    QString buildType;       // "Release", "Debug"
+
+    // Operating system
+    QString osName;          // "Windows", "Linux", "macOS"
+    QString osVersion;       // "11", "Ubuntu 24.04"
 };
 
 inline QDataStream&
@@ -429,7 +480,11 @@ operator<<(QDataStream& out,
         << p.channelId
         << p.muted
         << p.deafened
-        << p.camera;
+        << p.camera
+        << p.appVersion
+        << p.buildType
+        << p.osName
+        << p.osVersion;
 
     return out;
 }
@@ -443,7 +498,12 @@ operator>>(QDataStream& in,
         >> p.channelId
         >> p.muted
         >> p.deafened
-        >> p.camera;
+        >> p.camera
+        >> p.appVersion
+        >> p.buildType
+        >> p.osName
+        >> p.osVersion;
+
 
     return in;
 }

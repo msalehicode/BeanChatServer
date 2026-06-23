@@ -3,7 +3,7 @@
 #include <QString>
 #include <QList>
 
-class User;
+class UserModel;
 
 class Channel
 {
@@ -18,5 +18,5 @@ public:
     bool permanentChat = false;
     bool temporaryChat = true;
 
-    QList<User*> users;
+    QList<UserModel*> users;
 };

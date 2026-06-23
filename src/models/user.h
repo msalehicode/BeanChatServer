@@ -5,7 +5,7 @@
 
 class Channel;
 
-class User
+class UserModel
 {
 public:
 
@@ -20,6 +20,7 @@ public:
     bool udpRegistered = false;
 
     QString ip;
+    quint16 port;
 
     qint64 connectedSince = 0;
 
@@ -33,4 +34,19 @@ public:
     QTcpSocket* socket = nullptr;
 
     Channel* currentChannel = nullptr;
+
+
+
+
+    // Client information
+    QString appVersion;      // "1.2.5"
+    QString buildType;       // "Release", "Debug"
+
+    // Operating system
+    QString osName;          // "Windows", "Linux", "macOS"
+    QString osVersion;       // "11", "Ubuntu 24.04"
+
+    // Hardware / machine
+    QString machineName;     // Computer hostname
+    QString machineId;       // Stable generated ID
 };

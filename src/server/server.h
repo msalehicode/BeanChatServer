@@ -27,15 +27,14 @@ public:
     bool start(
         quint16 port, quint16 udpPort);
 
-    User* loginUser(
-        const QString& username,
-        const QString& identity,
+    UserModel* loginUser(
+        const LoginRequestPacket &req,
         QTcpSocket* socket);
 
-    User* findUser(QTcpSocket* socket);
+    UserModel* findUser(QTcpSocket* socket);
 
     void removeUser(
-        User* user);
+        UserModel* user);
 
     Channel* createChannel(
         const QString& name,
@@ -51,23 +50,23 @@ public:
         const QString& text);
 
     void broadcastMessage(
-        User* sender,
+        UserModel* sender,
         const QString& text);
 
-    void broadcastMessage(User* sender, SendMessagePacket &message);
+    void broadcastMessage(UserModel* sender, SendMessagePacket &message);
 
     void sendToAll(PacketType pt, const QByteArray& packedData,
-                   User* exceptThis=nullptr, QByteArray exceptData=0);
-    void sendToUser(User* receiver, const QByteArray& packedData);
+                   UserModel* exceptThis=nullptr, QByteArray exceptData=0);
+    void sendToUser(UserModel* receiver, const QByteArray& packedData);
 
     void notifyEveryone(const QString& text);
 
     bool joinChannel(
-        User* user,
+        UserModel* user,
         quint64 channelId,
         const QString& password);
 
-    QList<User*> users() const;
+    QList<UserModel*> users() const;
 
     QByteArray buildServerState();
 
@@ -84,7 +83,7 @@ private:
 
     QTcpServer m_server;
 
-    QList<User*> m_users;
+    QList<UserModel*> m_users;
 
     QList<Channel*> m_channels;
 

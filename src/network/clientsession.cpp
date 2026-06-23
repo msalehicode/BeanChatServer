@@ -29,7 +29,7 @@ ClientSession::ClientSession(
         &ClientSession::onDisconnected);
 }
 
-User* ClientSession::user() const
+UserModel *ClientSession::user() const
 {
     return m_user;
 }
@@ -97,10 +97,7 @@ void ClientSession::handleLogin(const QByteArray& payload)
         return;
 
     m_user =
-        m_server->loginUser(
-            req.username,
-            req.identity,
-            m_socket);
+        m_server->loginUser(req,m_socket);
 
     // LoginResponsePacket resp;
 

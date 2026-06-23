@@ -6,7 +6,7 @@
 #include "../network/packet.h"
 
 class Server;
-class User;
+class UserModel;
 
 class ClientSession : public QObject
 {
@@ -17,7 +17,7 @@ public:
         QTcpSocket* socket,
         Server* server);
 
-    User* user() const;
+    UserModel* user() const;
 
     void sendPacket(
         PacketType type,
@@ -40,5 +40,5 @@ private:
     QTcpSocket* m_socket;
     Server* m_server;
 
-    User* m_user = nullptr;
+    UserModel* m_user = nullptr;
 };

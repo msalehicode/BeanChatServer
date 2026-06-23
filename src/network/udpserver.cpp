@@ -38,7 +38,7 @@ bool UdpServer::start(
     return ok;
 }
 
-User* UdpServer::findUser(
+UserModel* UdpServer::findUser(
     quint64 userId)
 {
     for(auto user :
@@ -114,7 +114,7 @@ void UdpServer::processRegister(
 
     if(!user)
     {
-        // qDebug() << "UDP register failed";
+        qDebug() << "UDP register failed";
 
         return;
     }
@@ -130,7 +130,7 @@ void UdpServer::processRegister(
 
     qDebug()
         << user->username
-        << "UDP registered";
+        << "UDP registered" << "user addres= " << user->udpAddress << " port:" << user->udpPort;
 }
 
 void UdpServer::processVoice(
