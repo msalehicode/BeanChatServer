@@ -269,7 +269,8 @@ operator<<(QDataStream& out,
            const ChannelCreatedPacket& p)
 {
     out << p.id
-        << p.name;
+        << p.name
+        << p.isLocked;
 
     return out;
 }
@@ -279,7 +280,8 @@ operator>>(QDataStream& in,
            ChannelCreatedPacket& p)
 {
     in >> p.id
-        >> p.name;
+        >> p.name
+        >> p.isLocked;
 
     return in;
 }
