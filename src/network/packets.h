@@ -638,3 +638,34 @@ operator>>(QDataStream& in,
 
     return in;
 }
+
+
+struct PingPacket
+{
+    quint32 sequence;
+    int lastPing=-1;
+    float voicePacketLoss=0.0f;
+    float videoPacketLoss=0.0f;
+};
+
+inline QDataStream& operator<<(QDataStream& out,
+                               const PingPacket& p)
+{
+    out << p.sequence
+        << p.lastPing
+        << p.voicePacketLoss
+        << p.videoPacketLoss;
+
+    return out;
+}
+
+inline QDataStream& operator>>(QDataStream& in,
+                               PingPacket& p)
+{
+    in >> p.sequence
+       >> p.lastPing
+       >> p.voicePacketLoss
+       >> p.videoPacketLoss;
+
+    return in;
+}

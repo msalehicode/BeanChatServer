@@ -3,7 +3,19 @@
 #include <QString>
 #include <QTcpSocket>
 
+#include <QHash>
 class Channel;
+
+
+struct PacketLossStats
+{
+    quint64 windowReceived = 0;
+    quint64 windowLost = 0;
+
+    float packetLoss = 0.0f;
+
+    quint32 highestSequence = 0;
+};
 
 class UserModel
 {
@@ -13,6 +25,7 @@ public:
 
     QString username;
     QString identity;
+
 
     QHostAddress udpAddress;
     quint16 udpPort = 0;
@@ -28,8 +41,19 @@ public:
     bool deafened = false;
     bool camera = false;
 
+    //ping system over udp
     int ping = 0;
     float packetLoss = 0.0f;
+    quint32 nextPingSequence = 0;
+    quint64 pingsSent = 0;
+    quint64 pongsReceived = 0;
+    QHash<quint32, qint64> pendingPings;
+
+
+    //packetloss
+    PacketLossStats voicePacketLossStats;
+    PacketLossStats videoPacketLossStats;
+
 
     QTcpSocket* socket = nullptr;
 

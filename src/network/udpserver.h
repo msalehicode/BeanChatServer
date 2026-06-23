@@ -3,20 +3,29 @@
 #include <QObject>
 #include <QUdpSocket>
 
+#include <QTimer>
+#include <QDateTime>
+
+#include "../models/user.h"
+
 class Server;
-class UserModel;
 
 class UdpServer : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit UdpServer(
-        Server* server,
-        QObject* parent = nullptr);
+    explicit UdpServer(Server* server, QObject* parent = nullptr);
 
     bool start(quint16 port);
 
+    void sendPings();
+    void processPong(const QNetworkDatagram& datagram, QDataStream& stream);
+
+
+    void updatePacketLoss();
+    void calculateUpdatePacketLoss(PacketLossStats& stats);
+    void calculatePacketLoss(quint32 packetSequence, PacketLossStats& stats);
 private slots:
     void onReadyRead();
 
@@ -39,4 +48,8 @@ private:
 private:
     QUdpSocket m_socket;
     Server* m_server = nullptr;
+
+    QTimer m_pingTimer;
+
+    QTimer m_packetLossTimer;
 };
