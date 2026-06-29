@@ -40,6 +40,7 @@ private:
 
 private:
     QByteArray m_buffer;
+    bool m_connectionLost=false;
 
     QTcpSocket* m_socket;
     Server* m_server;

@@ -368,24 +368,24 @@ void ClientSession::processPacket(
 
 void ClientSession::forceDisconnect(bool connectionLost)
 {
+    qDebug() << "force disconnect user due to (connection lost) or (he sent a packet which hits tcpMaxPacketSize).";
+    m_connectionLost=connectionLost;
+    m_socket->disconnectFromHost();
+}
+
+
+void ClientSession::onDisconnected()
+{
+
     if (m_user)
     {
         UserDisconnectedPacket dc;
         dc.id = m_user->id;
-        dc.wasConnectionLost = connectionLost;
+        dc.wasConnectionLost = m_connectionLost;
 
-        sendToEveryone(
-            PacketType::UserDisconnected,
-            PacketHelpers::pack(dc));
-    }
+        qDebug() << "user " << m_user->username <<  "(" << m_user->id << ")  Disconnected.";
+        sendToEveryone(PacketType::UserDisconnected, PacketHelpers::pack(dc));
 
-    m_socket->disconnectFromHost();
-}
-
-void ClientSession::onDisconnected()
-{
-    if (m_user)
-    {
         m_server->removeUser(m_user);
         m_user = nullptr;
     }
