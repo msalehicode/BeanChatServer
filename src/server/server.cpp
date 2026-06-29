@@ -333,7 +333,7 @@ QByteArray Server::buildServerState()
 
         info.id = channel->id;
         info.name = channel->name;
-        info.isLocked = (channel->password.isNull() ? false : true);
+        info.isLocked = (channel->password.isEmpty() ? false : true);
         info.saveChats = channel->saveChats;
 
         state.channels.push_back(info);

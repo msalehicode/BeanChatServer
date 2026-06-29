@@ -276,7 +276,7 @@ void ClientSession::processPacket(
             cc.name = channelCreated->name;
             cc.saveChats = channelCreated->saveChats;
 
-            if(!channelCreated->password.isNull())
+            if(!channelCreated->password.isEmpty())
                 cc.isLocked=true;
 
             sendToEveryone(PacketType::ChannelCreated, PacketHelpers::pack(cc));
