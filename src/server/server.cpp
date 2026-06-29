@@ -65,20 +65,18 @@ bool Server::start(
     return true;
 }
 
+
 void Server::onNewConnection()
 {
-    while(
-        m_server.hasPendingConnections())
+    while (m_server.hasPendingConnections())
     {
-        auto socket =
-            m_server.nextPendingConnection();
+        QTcpSocket *socket = m_server.nextPendingConnection();
 
-        new ClientSession(
-            socket,
-            this);
+        ClientSession *session = new ClientSession(socket, this);
 
-        qDebug()
-            << "Incoming connection";
+        m_sessions.insert(socket, session);
+
+        qDebug() << "Incoming connection";
     }
 }
 
@@ -102,66 +100,22 @@ UserModel* Server::loginUser(
     user->osName = req.osName;
     user->osVersion = req.osVersion;
 
-    LoginResponsePacket resp;
+    user->id =m_nextUserId++;
+    user->username = req.username;
 
+    user->connectedSince = QDateTime::currentSecsSinceEpoch();
 
-    //check user veriosn compatibility?
-    //code here
+    user->currentChannel=nullptr;
+    //dont set a channel to user.
+    // user->currentChannel =
+    //     m_channels.first();
+    // user->currentChannel
+    //     ->users
+    //     .push_back(user);
 
-    resp.accepted = true;
-    resp.message = resp.accepted ? "OK" : "Rejected";
+    m_users.push_back(user);
 
-    if(resp.accepted)
-    {
-        user->id =m_nextUserId++;
-        user->username = req.username;
-
-        user->connectedSince =
-            QDateTime::currentSecsSinceEpoch();
-
-        //dont set a channel to user.
-        // user->currentChannel =
-        //     m_channels.first();
-        // user->currentChannel
-        //     ->users
-        //     .push_back(user);
-
-        m_users.push_back(
-            user);
-
-        qDebug()
-            << req.username
-            << "logged in";
-
-        UserConnectedPacket uc;
-        uc.id = user->id;
-        uc.username = user->username;
-        uc.appVersion = user->appVersion;
-        uc.buildType = user->buildType;
-        uc.osName = user->osName;
-        uc.osVersion = user->osVersion;
-        qDebug() << "user report his system info: " <<  uc.appVersion << "-" << uc.buildType << "-" << uc.osName << "-" << uc.osVersion;
-
-        LoginResponsePacket lrp;
-        lrp.id = user->id;
-        lrp.accepted=true;
-        lrp.message="logged in fine";
-        Packet packet;
-        packet.type = PacketType::LoginResponse;
-        packet.payload = PacketHelpers::pack(lrp);
-        QByteArray bytes = packet.serialize();
-
-
-        sendToAll(PacketType::UserConnected, PacketHelpers::pack(uc), user, bytes);
-
-        printUsers();
-    }
-    else
-    {
-        user->socket->write(PacketHelpers::pack(resp));
-        qDebug() << "an invalid login detected.";
-    }
-
+    qDebug() << req.username << "logged in";
 
     return user;
 }
@@ -179,212 +133,174 @@ UserModel *Server::findUser(QTcpSocket *socket)
     return nullptr;
 }
 
-void Server::removeUser(
-    UserModel* user, bool connectionLost)
+void Server::removeUser(UserModel *user)
 {
-    if(!user)
+    if (!user)
         return;
 
-    if(user->currentChannel)
-    {
-        user->currentChannel
-            ->users
-            .removeAll(user);
-    }
+    if (user->currentChannel)
+        user->currentChannel->users.removeAll(user);
 
-    m_users.removeAll(
-        user);
-
-
-    if(connectionLost)
-    {
-        qDebug()
-        << user->username
-        << " connection lost.";
-
-        UserDisconnectedPacket ud;
-        ud.id = user->id;
-        sendToAll(PacketType::UserConnectionLost, PacketHelpers::pack(ud));
-    }
-    else
-    {
-        qDebug()
-        << user->username
-        << "disconnected";
-
-        UserDisconnectedPacket ud;
-        ud.id = user->id;
-        sendToAll(PacketType::UserDisconnected, PacketHelpers::pack(ud));
-
-    }
-
+    m_users.removeAll(user);
 
     delete user;
+}
+
+void Server::removeSession(QTcpSocket *socket)
+{
+    m_sessions.remove(socket);
+}
+
+void Server::disconnectUser(UserModel *user, bool connectionLost)
+{
+    ClientSession *session = m_sessions.value(user->socket);
+
+    if (session)
+        session->forceDisconnect(connectionLost);
 }
 
 Channel* Server::createChannel(
     const QString& name,
     const QString& password,
-    bool permanentChat,
-    bool temporaryChat)
+    bool saveChats,
+    UserModel* owner)
 {
-    auto channel =
-        new Channel;
+    auto channel = new Channel;
 
-    channel->id =
-        m_channels.size() + 1;
+    channel->id = m_channels.size() + 1;
+    channel->name = name;
+    channel->password = password;
+    channel->saveChats = saveChats;
 
-    channel->name =
-        name;
+    if(owner)
+        channel->owner=owner;
+    else
+        channel->owner=nullptr;
 
-    channel->password =
-        password;
-
-    channel->permanentChat =
-        permanentChat;
-
-    channel->temporaryChat =
-        temporaryChat;
-
-    m_channels.push_back(
-        channel);
+    m_channels.push_back(channel);
 
     qDebug()
         << "Channel created:"
         << channel->id
         << channel->name;
 
-    ChannelCreatedPacket cc;
-    cc.id = channel->id;
-    cc.name = channel->name;
-
-    if(!password.isNull())
-        cc.isLocked=true;
-
-    sendToAll(PacketType::ChannelCreated, PacketHelpers::pack(cc));
-
     return channel;
 }
 
-void Server::changeUserStatus(PacketType type , QTcpSocket *socket)
+int Server::changeUserStatus(PacketType type,
+                              UserModel* user)
 {
-    UserModel* usr = findUser(socket);
-    if(usr)
+    switch(type)
     {
-        UserStatusChangedPacket us;
-        us.userId=usr->id;
-        us.userChannelId=usr->currentChannel->id;
+        case PacketType::UserCameraClosed:
+            //is actually status changed?
+            if(!user->camera)
+                return false;//nothing changed.
 
-        switch(type)
-        {
-            case PacketType::UserCameraClosed:
-                us.status = false;
-                usr->camera = false;
-                break;
-            case PacketType::UserCameraOpened:
-                us.status = true;
-                usr->camera = true;
-                break;
+            user->camera = false;
+            return 0;
+        case PacketType::UserCameraOpened:
 
-            case PacketType::UserMuted:
-                us.status=true;
-                usr->muted=true;
-                break;
-            case PacketType::UserUnmuted:
-                us.status=false;
-                usr->muted=false;
-                break;
+            //is actually status changed?
+            if(user->camera)
+                return false;//nothing changed.
 
-            case PacketType::UserDeafened:
-                us.status=true;
-                usr->deafened=true;
-                break;
-            case PacketType::UserUndeafened:
-                us.status=false;
-                usr->deafened=false;
-                break;
-            default:
-                qDebug() << "undefined type for changeUserStatus..";
-                return;
-        }
+            user->camera = true;
+            return 1;
+            break;
 
-        sendToAll(type, PacketHelpers::pack(us));
+        case PacketType::UserMuted:
+            //is actually status changed?
+            if(user->muted)
+                return false;//nothing changed.
+
+            user->muted=true;
+            return 1;
+        case PacketType::UserUnmuted:
+            //is actually status changed?
+            if(!user->muted)
+                return false;//nothing changed.
+
+            user->muted=false;
+            return 0;
+
+        case PacketType::UserDeafened:
+            //is actually status changed?
+            if(user->deafened)
+                return false;//nothing changed.
+
+            user->deafened=true;
+            return 1;
+        case PacketType::UserUndeafened:
+            //is actually status changed?
+            if(!user->deafened)
+                return false;//nothing changed.
+
+            user->deafened=false;
+            return 0;
+        default:
+            qDebug() << "undefined type for changeUserStatus..";
     }
+
+    return -1;
 }
 
-bool Server::joinChannel(
+QByteArray Server::joinChannel(
     UserModel* user,
     quint64 channelId,
     const QString& password)
 {
-    Channel* target =
-        nullptr;
-
+    //find channel by id
+    Channel* target = nullptr;
     for(auto channel : m_channels)
     {
         if(channel->id == channelId)
         {
             target = channel;
-
             break;
         }
     }
-
     if(!target)
     {
         qDebug() << "channel not found";
-        return false;
+        return QByteArray();
     }
 
-    if(target->password
-        != password && !target->password.isEmpty())
+    if(!target->password.isEmpty()
+         && target->password != password)
     {
         qDebug() << "wrong password";
-        return false;
+        return QByteArray();
     }
 
     //check if user had a current channel, then remove him from that channel
     quint64 userOldChannel=-1;
-
     if(user->currentChannel)
     {
         userOldChannel = user->currentChannel->id;
 
         if(user->currentChannel)
-        {
-            user->currentChannel
-                ->users
-                .removeAll(user);
-        }
-
+            user->currentChannel->users.removeAll(user);
     }
 
+    //add user to new channel
     target->users.push_back(user);
-
     user->currentChannel = target;
 
     qDebug()
         << user->username
-        << "has left "
+        << "has left channel-id "
         << userOldChannel
         << " and joined"
-        << target->name;
+        << target->id << "(" << target->name << ")";
 
     UserJoinedChannelPacket ujs;
     ujs.channelId = target->id;
     ujs.userId = user->id;
     ujs.oldChannelId = userOldChannel;
 
-    Packet packet;
-    packet.type = PacketType::UserJoinedChannel;
-    packet.payload = PacketHelpers::pack(ujs);
 
-    QByteArray bytes = packet.serialize();
-    for(auto user : m_users)
-        user->socket->write(bytes);
-
-
-    return true;
+    return PacketHelpers::pack(ujs);
 }
 
 QList<UserModel *> Server::users() const
@@ -403,15 +319,9 @@ QByteArray Server::buildServerState()
         info.id = channel->id;
         info.name = channel->name;
         info.isLocked = (channel->password.isNull() ? false : true);
+        info.saveChats = channel->saveChats;
 
-        info.permanentChat =
-            channel->permanentChat;
-
-        info.temporaryChat =
-            channel->temporaryChat;
-
-        state.channels.push_back(
-            info);
+        state.channels.push_back(info);
     }
 
     for(auto user : m_users)
@@ -510,176 +420,3 @@ void Server::saveMessage(
     query.exec();
 }
 
-void Server::broadcastMessage(
-    UserModel* sender,
-    const QString& text)
-{
-    if(!sender)
-        return;
-
-    auto channel =
-        sender->currentChannel;
-
-    if(!channel)
-        return;
-
-    ChatMessagePacket packet;
-
-    packet.senderId =
-        sender->id;
-
-    // packet.channelId =
-    //     channel->id;
-
-    packet.text =
-        text;
-
-    QByteArray payload =
-        PacketHelpers::pack(
-            packet);
-
-    Packet networkPacket;
-
-    networkPacket.type =
-        PacketType::ChatMessage;
-
-    networkPacket.payload =
-        payload;
-
-    QByteArray bytes =
-        networkPacket.serialize();
-
-    for(auto user :
-         channel->users)
-    {
-        user->socket->write(
-            bytes);
-    }
-
-    if(channel->permanentChat)
-    {
-        saveMessage(
-            channel->id,
-            sender->id,
-            text);
-    }
-
-    qDebug()
-        << sender->username
-        << ":"
-        << text;
-}
-
-void Server::broadcastMessage(UserModel *sender, SendMessagePacket &message)
-{
-    if(!sender)
-        return;
-
-    auto channel =
-        sender->currentChannel;
-
-    if(!channel)
-        return;
-
-
-    //convert send message to chatmessage.
-    ChatMessagePacket msg;
-
-
-    msg.senderId = sender->id;
-    msg.messageId = 0; //later change this -------------------------------------------
-    msg.text = message.text;
-    msg.type = static_cast<ChatMessagePacket::Type>(message.type);
-    msg.mediaPath = message.mediaPath;
-    // message.channelId = channel->id;
-    msg.timestamp = QDateTime::currentDateTime();
-
-
-    QByteArray payload = PacketHelpers::pack(msg);
-    Packet networkPacket;
-    networkPacket.type = PacketType::ChatMessage;
-    networkPacket.payload = payload;
-    QByteArray bytes = networkPacket.serialize();
-
-    for(auto user : channel->users)
-    {
-        user->socket->write(bytes);
-    }
-
-    // if(channel->permanentChat)
-    // {
-    //     saveMessage(
-    //         channel->id,
-    //         sender->id,
-    //         text);
-    // }
-
-    qDebug()
-        << sender->username
-        << ":"
-        << message.text;
-}
-
-
-
-void Server::sendToAll(PacketType pt, const QByteArray& packedData,
-                       UserModel* exceptThis, QByteArray exceptData)
-{
-    Packet packet;
-    packet.type = pt;
-    packet.payload = packedData;
-
-    QByteArray bytes = packet.serialize();
-    if(exceptThis==nullptr)
-    {
-        for(auto user : m_users)
-            user->socket->write(bytes);
-    }
-    else
-    {
-        for(auto user : m_users)
-        {
-            if(user->id == exceptThis->id)
-                user->socket->write(exceptData);
-            else
-                user->socket->write(bytes);
-        }
-    }
-
-}
-
-void Server::sendToUser(UserModel *receiver, const QByteArray &packedData)
-{
-    if(!receiver)
-        return;
-
-    for(UserModel* user : m_users)
-    {
-        if(user->id==receiver->id)
-        {
-            user->socket->write(packedData);
-            return;
-        }
-    }
-    qDebug() << "user not found to send .. id=" << receiver->id;
-    return;
-}
-
-void Server::notifyEveryone(const QString &text)
-{
-    SendMessagePacket sm;
-    sm.text = text;
-
-    Packet packet;
-    packet.type = PacketType::ChatMessage;
-
-    packet.payload = PacketHelpers::pack(sm);
-
-    QByteArray bytes = packet.serialize();
-
-    //write to all users.
-    for(auto user : m_users)
-    {
-        user->socket->write(bytes);
-    }
-}

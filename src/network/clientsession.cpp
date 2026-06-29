@@ -9,6 +9,8 @@
 
 #include <QDebug>
 
+constexpr quint32 tcpMaxPacketSize = 50 * 1024 * 1024; // 50 MB
+
 ClientSession::ClientSession(
     QTcpSocket* socket,
     Server* server)
@@ -34,7 +36,8 @@ UserModel *ClientSession::user() const
     return m_user;
 }
 
-void ClientSession::sendPacket(
+
+void ClientSession::sendToSender(
     PacketType type,
     const QByteArray& payload)
 {
@@ -47,10 +50,70 @@ void ClientSession::sendPacket(
         packet.serialize());
 }
 
+void ClientSession::sendToEveryone(
+    PacketType type,
+    const QByteArray &payload)
+{
+    Packet packet;
+    packet.type = type;
+    packet.payload = payload;
+
+    QByteArray bytes = packet.serialize();
+
+    for (UserModel *user : m_server->users())
+    {
+        if (user->socket)
+            user->socket->write(bytes);
+    }
+}
+
+void ClientSession::sendToEveryoneExceptSender(
+    PacketType type,
+    const QByteArray &payload)
+{
+    Packet packet;
+    packet.type = type;
+    packet.payload = payload;
+
+    QByteArray bytes = packet.serialize();
+
+    for (UserModel *user : m_server->users())
+    {
+        if (!user->socket)
+            continue;
+
+        if (user == m_user)
+            continue;
+
+        user->socket->write(bytes);
+    }
+}
+
+
+void ClientSession::sendToChannel(
+    PacketType type,
+    const QByteArray &payload)
+{
+    if (!m_user || !m_user->currentChannel)
+        return;
+
+    Packet packet;
+    packet.type = type;
+    packet.payload = payload;
+
+    QByteArray bytes = packet.serialize();
+
+    for (UserModel *user : m_user->currentChannel->users)
+    {
+        if (user->socket)
+            user->socket->write(bytes);
+    }
+}
+
+
 void ClientSession::onReadyRead()
 {
-    m_buffer.append(
-        m_socket->readAll());
+    m_buffer.append(m_socket->readAll());
 
     while(true)
     {
@@ -65,19 +128,26 @@ void ClientSession::onReadyRead()
         header >> type;
         header >> size;
 
+        //check for packet size dont exceed from the max size
+        if (size > tcpMaxPacketSize)
+        {
+            qWarning() << "Packet too large from " << m_socket->peerAddress();
+            forceDisconnect(false);
+            return;
+        }
+
         if(m_buffer.size() < (6 + size))
             return;
 
-        QByteArray packetBytes =
-            m_buffer.left(6 + size);
+
+
+        QByteArray packetBytes = m_buffer.left(6 + size);
 
         m_buffer.remove(
             0,
             6 + size);
 
-        Packet packet =
-            Packet::deserialize(
-                packetBytes);
+        Packet packet = Packet::deserialize(packetBytes);
 
         processPacket(packet);
     }
@@ -85,137 +155,243 @@ void ClientSession::onReadyRead()
 
 void ClientSession::handleLogin(const QByteArray& payload)
 {
-    auto req =
-        PacketHelpers::unpack<LoginRequestPacket>(
-            payload);
+    auto req = PacketHelpers::unpack<LoginRequestPacket>(payload);
 
-    qDebug()
-        << "login user...";
+    qDebug() << "login user...";
 
+    //check user veriosn compatibility?
+    //code here
 
+    //authentication
     if(req.username.isEmpty() || req.identity.isEmpty())
+    {
+        LoginResponsePacket resp;
+        resp.accepted=false;
+        resp.message="login failed due to username or identity is empty.";
+        sendToSender(PacketType::LoginResponse, PacketHelpers::pack(resp));
         return;
+    }
 
-    m_user =
-        m_server->loginUser(req,m_socket);
 
-    // LoginResponsePacket resp;
+    m_user = m_server->loginUser(req,m_socket);
+    if(!m_user)
+    {
+        qDebug() << "faild to loginUser. server returnes null user.";
+        return;
+    }
 
-    // resp.accepted =
-    //     (m_user != nullptr);
+    //send login response to sender
+    LoginResponsePacket lrp;
+    lrp.id = m_user->id; //tell him is id, to know when we say user 10 moved if it's equal to his id knows it's himself.
+    lrp.accepted=true; //it's accepted so user send udp login/register and ask for serverLatestState
+    lrp.message="logged in succesfully.";
+    sendToSender(PacketType::LoginResponse, PacketHelpers::pack(lrp));
 
-    // resp.message =
-    //     resp.accepted
-    //         ? "OK"
-    //         : "Rejected";
 
-    // sendPacket(
-    //     PacketType::LoginResponse,
-    //     PacketHelpers::pack(resp));
+    m_server->printUsers();
+
+
+    //notify all users in server someone connected.
+    UserConnectedPacket uc;
+    uc.id = m_user->id;
+    uc.username = m_user->username;
+    uc.appVersion = m_user->appVersion;
+    uc.buildType = m_user->buildType;
+    uc.osName = m_user->osName;
+    uc.osVersion = m_user->osVersion;
+    qDebug() << "user connected and reported his system info: " <<  uc.appVersion << "-" << uc.buildType << "-" << uc.osName << "-" << uc.osVersion;
+    sendToEveryone(PacketType::UserConnected, PacketHelpers::pack(uc));
 }
 
 void ClientSession::processPacket(
     const Packet& packet)
 {
-    qDebug()
-    << "processPacket: type="
-    << static_cast<int>(
-           packet.type);
+    qDebug() << "processPacket: type=" << static_cast<int>(packet.type);
 
     switch(packet.type)
     {
+    case PacketType::LoginRequest:
+    {
+        handleLogin(packet.payload);
+        break;
+    }
     case PacketType::RequestServerState:
     {
+        //check for user logged in?
         if(!m_user)
             break;
 
-        sendPacket(
-            PacketType::ServerState,
-            m_server->buildServerState());
+        sendToSender(PacketType::ServerState, m_server->buildServerState());
+        break;
     }
-    case PacketType::LoginRequest:
-    {
-        handleLogin(
-            packet.payload);
-    }
-    break;
-
     case PacketType::UserCameraClosed:
     case PacketType::UserCameraOpened:
     case PacketType::UserMuted:
     case PacketType::UserUnmuted:
     case PacketType::UserDeafened:
     case PacketType::UserUndeafened:
-
     {
-        auto resp =
-            PacketHelpers::unpack<UserStatusChangedPacket>(
-                packet.payload);
-
-        m_server->changeUserStatus(packet.type, m_socket);
-    }break;
-
-    case PacketType::CreateChannel:
-    {
-        auto req =
-            PacketHelpers::unpack<CreateChannelPacket>(
-                packet.payload);
-
-        m_server->createChannel(
-            req.name,
-            req.password,
-            req.permanentChat,
-            req.temporaryChat);
-
-
-        m_server->printChannelWithUsersIn();
-    }
-    break;
-
-    case PacketType::JoinChannel:
-    {
+        //check for user logged in?
         if(!m_user)
             break;
 
-        auto req =
-            PacketHelpers::unpack<JoinChannelPacket>(
-                packet.payload);
+        auto req = PacketHelpers::unpack<UserStatusChangedPacket>(packet.payload);
 
-        m_server->joinChannel(
-            m_user,
-            req.channelId,
-            req.password);
+        //check if user status changed?
+        bool status = m_server->changeUserStatus(packet.type, m_user);
+        if(status == 0 || status == 1)
+        {
+            //send change to everyone
+            UserStatusChangedPacket us;
+            us.userId=m_user->id;
+            us.userChannelId=m_user->currentChannel->id;
+            us.status= status;
+            sendToEveryone(packet.type, PacketHelpers::pack(us));
+        }
+        break;
+    }
+
+    case PacketType::CreateChannel:
+    {
+        //check for user logged in?
+        if(!m_user)
+            break;
+
+        //check for has user permission to create channel
+        //code here
+
+
+        auto req = PacketHelpers::unpack<CreateChannelPacket>(packet.payload);
+
+        Channel* channelCreated = m_server->createChannel(
+            req.name,
+            req.password,
+            req.saveChats,
+            m_user); //m_user as owner
+
+        if(channelCreated)
+        {
+            ChannelCreatedPacket cc;
+            cc.id = channelCreated->id;
+            cc.name = channelCreated->name;
+
+            if(!channelCreated->password.isNull())
+                cc.isLocked=true;
+
+            sendToEveryone(PacketType::ChannelCreated, PacketHelpers::pack(cc));
+        }
+
+        m_server->printChannels();
+        break;
+    }
+
+    case PacketType::JoinChannel:
+    {
+        //check for user logged in?
+        if(!m_user)
+            break;
+
+        auto req = PacketHelpers::unpack<JoinChannelPacket>(packet.payload);
+
+        QByteArray channelResponse = m_server->joinChannel(m_user, req.channelId, req.password);
+        if(channelResponse.isEmpty())
+        {
+            qDebug() << "notify user channel not found or password is incorrect";
+            break;
+        }
+
+        sendToEveryone(PacketType::UserJoinedChannel, channelResponse);
 
         m_server->printChannelWithUsersIn();
+        break;
     }
-    break;
+
 
     case PacketType::ChatMessage:
     {
+        //check for user logged in?
+        if(!m_user)
+            break;
+
+        //check if user has a channel
+        Channel* channel = m_user->currentChannel;
+        if(!channel)
+            break;
+
+        //check has user permission to chat in channel?
+        //code here
+
+
+        //do unpack
         auto msg = PacketHelpers::unpack<SendMessagePacket>(packet.payload);
+
+
+        //check if content is empty
+        if(msg.text.isEmpty())
+            break;
+
+        //convert sendMessagePacket to ChatMessagePacket
+        ChatMessagePacket cm;
+        cm.senderId = m_user->id;
+        cm.senderName = m_user->username;
+        cm.type = static_cast<ChatMessagePacket::Type>(msg.type);
+        cm.messageId=-1; //later increase this for each channel messages
+        cm.text = msg.text;
+        cm.mediaPath = msg.mediaPath;
 
         qDebug() << "message received:"
                  << " text:" << msg.text
                  << " type:" << msg.type
                  << " mediapath:" << msg.mediaPath;
 
-        m_server->broadcastMessage(m_user,msg);
+        //save message if needed
+        if(channel->saveChats)
+        {
+            qDebug() << "save message for channel";
+            // m_server->saveMessage(
+            //     channel->id,
+            //     m_user->id,
+            //     msg.text);
+        }
+
+        sendToChannel(PacketType::ChatMessage, PacketHelpers::pack(cm));
+        break;
     }
 
-    break;
+
 
     default:
         break;
     }
 }
 
-void ClientSession::onDisconnected()
+
+void ClientSession::forceDisconnect(bool connectionLost)
 {
-    if(m_user)
+    if (m_user)
     {
-        m_server->removeUser(
-            m_user);
+        UserDisconnectedPacket dc;
+        dc.id = m_user->id;
+        dc.wasConnectionLost = connectionLost;
+
+        sendToEveryone(
+            PacketType::UserDisconnected,
+            PacketHelpers::pack(dc));
     }
 
+    m_socket->disconnectFromHost();
+}
+
+void ClientSession::onDisconnected()
+{
+    if (m_user)
+    {
+        m_server->removeUser(m_user);
+        m_user = nullptr;
+    }
+
+    m_server->removeSession(m_socket);
+
+    m_socket->deleteLater();
     deleteLater();
 }

@@ -217,13 +217,15 @@ operator>>(QDataStream& in,
 struct UserDisconnectedPacket
 {
     quint64 id;
+    bool wasConnectionLost=false;
 };
 
 inline QDataStream&
 operator<<(QDataStream& out,
            const UserDisconnectedPacket& p)
 {
-    out << p.id;
+    out << p.id
+        << p.wasConnectionLost;
     return out;
 }
 
@@ -231,9 +233,11 @@ inline QDataStream&
 operator>>(QDataStream& in,
            UserDisconnectedPacket& p)
 {
-    in >> p.id;
+    in >> p.id
+       >> p.wasConnectionLost;
     return in;
 }
+
 
 
 struct CreateChannelPacket
@@ -241,8 +245,7 @@ struct CreateChannelPacket
     QString name;
     QString password;
 
-    bool permanentChat;
-    bool temporaryChat;
+    bool saveChats;
 };
 
 inline QDataStream&
@@ -251,8 +254,7 @@ operator<<(QDataStream& out,
 {
     out << p.name
         << p.password
-        << p.permanentChat
-        << p.temporaryChat;
+        << p.saveChats;
 
     return out;
 }
@@ -263,8 +265,7 @@ operator>>(QDataStream& in,
 {
     in >> p.name
         >> p.password
-        >> p.permanentChat
-        >> p.temporaryChat;
+        >> p.saveChats;
 
     return in;
 }
@@ -415,8 +416,7 @@ struct ChannelInfo
     quint64 id;
     QString name;
     bool isLocked;
-    bool permanentChat;
-    bool temporaryChat;
+    bool saveChats;
 };
 
 inline QDataStream&
@@ -425,8 +425,7 @@ operator<<(QDataStream& out,
 {
     out << p.id
         << p.name
-        << p.permanentChat
-        << p.temporaryChat
+        << p.saveChats
         << p.isLocked;
 
     return out;
@@ -438,8 +437,7 @@ operator>>(QDataStream& in,
 {
     in >> p.id
         >> p.name
-        >> p.permanentChat
-        >> p.temporaryChat
+        >> p.saveChats
         >> p.isLocked;
 
     return in;
@@ -596,6 +594,7 @@ struct ChatMessagePacket
     //fill by server
     quint64 messageId;
     quint64 senderId;
+    QString senderName; //sometimes user has disconnected, we don't access to his id to findout what was his name
     // quint64 channelId;
     QDateTime timestamp=QDateTime::currentDateTime();
 
@@ -613,6 +612,7 @@ operator<<(QDataStream& out,
     out << p.messageId
         << p.senderId
         // << p.channelId
+        << p.senderName
         << p.text
         << p.type
         << p.mediaPath
@@ -629,6 +629,7 @@ operator>>(QDataStream& in,
     in >> p.messageId
         >> p.senderId
         // >> p.channelId
+        >> p.senderName
         >> p.text
         >> p.type
         >> p.mediaPath

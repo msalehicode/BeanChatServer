@@ -19,10 +19,14 @@ public:
 
     UserModel* user() const;
 
-    void sendPacket(
-        PacketType type,
-        const QByteArray& payload);
 
+    void sendToChannel(PacketType type, const QByteArray &payload);
+    void sentToChannelExceptSender(PacketType type, const QByteArray &payload);
+    void sendToSender(PacketType type, const QByteArray& payload);
+    void sendToEveryone(PacketType type, const QByteArray& payload);
+    void sendToEveryoneExceptSender(PacketType type, const QByteArray& payload);
+
+    void forceDisconnect(bool connectionLost);
 private slots:
     void onReadyRead();
     void onDisconnected();

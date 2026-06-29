@@ -15,8 +15,9 @@ public:
 
     QString password;
 
-    bool permanentChat = false;
-    bool temporaryChat = true;
+    UserModel* owner=nullptr;
+
+    bool saveChats = false;
 
     QList<UserModel*> users;
 };

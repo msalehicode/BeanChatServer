@@ -73,7 +73,7 @@ void UdpServer::sendPings()
             qDebug() << "user UDP timed out.";
 
             //disconnect user from server
-            m_server->removeUser(user,true); //disconnect user from server but tell other users, that connection lost.
+            m_server->disconnectUser(user, true); //disconnect user from server but tell other users, that connection lost.
             continue;
         }
 

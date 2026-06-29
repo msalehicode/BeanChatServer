@@ -6,61 +6,54 @@
 #include <QTcpSocket>
 
 #include <QList>
+#include <QHash>
 
-// class User;
-// class Channel;
 #include "../models/user.h"
 #include "../models/channel.h"
-
 #include "../network/packets.h"
-
 #include "../network/udpserver.h"
+
+class ClientSession;
 
 class Server : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit Server(
-        QObject* parent = nullptr);
+    explicit Server(QObject* parent = nullptr);
 
-    bool start(
-        quint16 port, quint16 udpPort);
+    bool start(quint16 port,
+               quint16 udpPort);
 
     UserModel* loginUser(
         const LoginRequestPacket &req,
         QTcpSocket* socket);
 
-    UserModel* findUser(QTcpSocket* socket);
+    UserModel* findUser(
+        QTcpSocket* socket);
 
-    void removeUser(UserModel* user, bool connectionLost=false);
+    void removeUser(UserModel* user);
+
+    void removeSession(QTcpSocket *socket);
+    void disconnectUser(UserModel *user, bool connectionLost=false);
 
     Channel* createChannel(
         const QString& name,
         const QString& password,
-        bool permanentChat,
-        bool temporaryChat);
+        bool saveChats,
+        UserModel *owner);
 
-    void changeUserStatus(PacketType type, QTcpSocket* socket);
+    int changeUserStatus(
+        PacketType type,
+        UserModel* user); //if status changed return 0/1 otherwise return -1 to say status not changed
 
     void saveMessage(
         quint64 channelId,
         quint64 senderId,
         const QString& text);
 
-    void broadcastMessage(
-        UserModel* sender,
-        const QString& text);
 
-    void broadcastMessage(UserModel* sender, SendMessagePacket &message);
-
-    void sendToAll(PacketType pt, const QByteArray& packedData,
-                   UserModel* exceptThis=nullptr, QByteArray exceptData=0);
-    void sendToUser(UserModel* receiver, const QByteArray& packedData);
-
-    void notifyEveryone(const QString& text);
-
-    bool joinChannel(
+    QByteArray joinChannel(
         UserModel* user,
         quint64 channelId,
         const QString& password);
@@ -77,10 +70,13 @@ public:
 private slots:
     void onNewConnection();
 
+
 private:
     quint64 m_nextUserId = 1;
 
     QTcpServer m_server;
+
+    QHash<QTcpSocket*, ClientSession*> m_sessions;
 
     QList<UserModel*> m_users;
 
