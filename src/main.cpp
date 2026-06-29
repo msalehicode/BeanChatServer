@@ -11,28 +11,41 @@ int main(
         argc,
         argv);
 
+
+    //get port from paremeters otherwise use default
+    bool ok1;
+    quint16 port = DEFAULT_PORT;
+    if (argc >= 2)
+    {
+        port = QString(argv[1]).toUShort(&ok1);
+
+        if (!ok1)
+        {
+            qCritical() << "Usage:" << argv[0] << " <Port for tcp and udp>";
+            return -1;
+        }
+    }
+
+
     Database database;
 
     if(!database.open())
     {
-        qCritical()
-        << "Failed to open database";
+        qCritical() << "Failed to open database";
 
         return -1;
     }
 
     Server server;
 
-    if(!server.start(9987,9988))
+    if(!server.start(port,port)) //tcp, udp are using the same port number
     {
-        qCritical()
-        << "Failed to start server";
+        qCritical() << "Failed to start server";
 
         return -1;
     }
 
-    qInfo()
-        << "Server running";
+    qInfo() << "Server is running...";
 
     return app.exec();
 }

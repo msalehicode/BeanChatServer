@@ -33,8 +33,7 @@ public:
 
     UserModel* findUser(QTcpSocket* socket);
 
-    void removeUser(
-        UserModel* user);
+    void removeUser(UserModel* user, bool connectionLost=false);
 
     Channel* createChannel(
         const QString& name,

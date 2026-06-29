@@ -15,7 +15,7 @@ bool Database::open()
             "QSQLITE");
 
     m_db.setDatabaseName(
-        "server.db");
+        DATABASE_FILE_NAME);
 
     if(!m_db.open())
     {

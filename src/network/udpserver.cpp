@@ -29,7 +29,7 @@ UdpServer::UdpServer(
         &QTimer::timeout,
         this,
         &UdpServer::sendPings);
-    m_pingTimer.start(2000);
+    m_pingTimer.start(UDP_SEND_PINGS_INTERVAL);
 
 
     //setup packetlosses timer
@@ -38,7 +38,7 @@ UdpServer::UdpServer(
         &QTimer::timeout,
         this,
         &UdpServer::updatePacketLoss);
-    m_packetLossTimer.start(5000);
+    m_packetLossTimer.start(UDP_CALCULATE_PACKETLOSS_INTERAL);
 }
 
 bool UdpServer::start(
@@ -50,7 +50,7 @@ bool UdpServer::start(
             port);
 
     qDebug()
-        << "udpVoice and udpVideo Listening on"
+        << "UDP: voice and video Listening on"
         << port;
 
     return ok;
@@ -65,6 +65,17 @@ void UdpServer::sendPings()
     {
         if(!user->udpRegistered)
             continue;
+
+
+        //check Has that connection repsonsed for a while or not
+        if (user->lastUdpPong.elapsed() > UDP_MAX_TIMEOUT_TO_CONNECTION_LOST) // 10 seconds
+        {
+            qDebug() << "user UDP timed out.";
+
+            //disconnect user from server
+            m_server->removeUser(user,true); //disconnect user from server but tell other users, that connection lost.
+            continue;
+        }
 
         PingPacket packet;
 
@@ -83,7 +94,7 @@ void UdpServer::sendPings()
             &data,
             QIODevice::WriteOnly);
 
-        out << quint16(103); //103 is ping sign
+        out << PacketType::UdpPingRequest;
         out << packet;
 
         m_socket.writeDatagram(
@@ -155,6 +166,8 @@ void UdpServer::processPong(
 
     user->ping =
         int(now - sentTime);
+
+    user->lastUdpPong.restart();
 
     user->pongsReceived++;
 
@@ -247,32 +260,30 @@ void UdpServer::onReadyRead()
         stream >> packetType;
 
         // qDebug()
-            // << "UDP TYPE:"
-            // << packetType;
+        //     << "UDP TYPE:"
+        //     << packetType;
 
-        switch(packetType)
+        switch(static_cast<PacketType>(packetType))
         {
-        case 100:
+        case PacketType::UdpLoginRequest:
             processRegister(
                 datagram,
                 stream);
             break;
 
-        case 101:
+        case PacketType::UdpVoiceData:
             processVoice(
                 datagram,
                 stream);
             break;
 
-        case 102:
+        case PacketType::UdpVideoData:
             processVideo(
                 datagram,
                 stream);
             break;
 
-        // case 103: //reserved ping request sends to client.
-
-        case 104:
+        case PacketType::UdpPingResponse:
             processPong(
                 datagram,
                 stream);
@@ -318,6 +329,24 @@ void UdpServer::processRegister(
     qDebug()
         << user->username
         << "UDP registered" << "user addres= " << user->udpAddress << " port:" << user->udpPort;
+
+
+
+    user->lastUdpPong.start();
+
+    //send back reponse login
+    QByteArray outData;
+
+    QDataStream out(
+        &outData,
+        QIODevice::WriteOnly);
+
+    out << PacketType::UdpLoginResponse;
+
+    m_socket.writeDatagram(
+            outData,
+            user->udpAddress,
+            user->udpPort);
 }
 
 void UdpServer::processVoice(
@@ -330,9 +359,9 @@ void UdpServer::processVoice(
 
     // qDebug()
     //     << "VOICE:"
-    //     << packet.senderId
-    //     << packet.sequence
-    //     << packet.audioData.size();
+    //         << packet.senderId << " "
+    //         << packet.sequence << " "
+    //         << packet.audioData.size();
 
     auto sender = findUser(packet.senderId);
 
@@ -374,7 +403,7 @@ void UdpServer::processVoice(
         &outData,
         QIODevice::WriteOnly);
 
-    out << quint16(101);
+    out << PacketType::UdpVoiceData;
     out << packet;
 
     for(auto user : channel->users)
@@ -401,11 +430,11 @@ void UdpServer::processVideo(const QNetworkDatagram &datagram, QDataStream &stre
 
     stream >> packet;
 
-    // qDebug()
-    //     << "Video:"
-    //     << packet.senderId
-    //     << packet.sequence
-    //     << packet.videoData.size();
+    qDebug()
+        << "Video:"
+            << packet.senderId << " "
+            << packet.sequence << " "
+            << packet.videoData.size();
 
     auto sender =
         findUser(
@@ -448,7 +477,7 @@ void UdpServer::processVideo(const QNetworkDatagram &datagram, QDataStream &stre
         &outData,
         QIODevice::WriteOnly);
 
-    out << quint16(102);
+    out << PacketType::UdpVideoData;
     out << packet;
 
     for(auto user : channel->users)

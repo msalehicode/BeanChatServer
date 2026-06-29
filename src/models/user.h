@@ -4,6 +4,8 @@
 #include <QTcpSocket>
 
 #include <QHash>
+#include <QElapsedTimer>
+
 class Channel;
 
 
@@ -48,6 +50,7 @@ public:
     quint64 pingsSent = 0;
     quint64 pongsReceived = 0;
     QHash<quint32, qint64> pendingPings;
+    QElapsedTimer lastUdpPong; //to know when user didn't response for a while that connection is lost.
 
 
     //packetloss

@@ -13,6 +13,7 @@ enum class PacketType : quint16
 
     UserConnected,
     UserDisconnected,
+    UserConnectionLost,
 
     CreateChannel,
     JoinChannel,
@@ -35,19 +36,16 @@ enum class PacketType : quint16
 
     ChannelDeleted,
 
-    VoiceDataOld,
-
-    VideoData,
-
-    PingRequest,
-    PingResponse,
-
     RequestServerState,
-    ServerState,
+    ServerState, //response to RequestServerState
 
-
-    UdpRegister = 100,
-    VoiceData = 101
+    //udp codes:
+    UdpLoginRequest = 100, //when user loginResponse arrived client sends this to server to register udp socket.
+    UdpLoginResponse = 101, //response to Udplogin
+    UdpPingRequest = 102, //continuesly server sends to registered UDP clients
+    UdpPingResponse = 103, //client responses to server's PingRequest
+    UdpVoiceData = 104,
+    UdpVideoData =105
 };
 
 struct UserStatusChangedPacket

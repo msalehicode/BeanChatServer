@@ -41,6 +41,7 @@ bool Server::start(
             QHostAddress::Any,
             port))
     {
+        qInfo() << "failed to bind tcp port.";
         return false;
     }
 
@@ -55,8 +56,11 @@ bool Server::start(
             this,
             this);
 
-    m_udpServer->start(
-        udpPort);
+    if(!m_udpServer->start(udpPort))
+    {
+        qInfo() << "failed to bind udp port.";
+        return false;
+    }
 
     return true;
 }
@@ -176,7 +180,7 @@ UserModel *Server::findUser(QTcpSocket *socket)
 }
 
 void Server::removeUser(
-    UserModel* user)
+    UserModel* user, bool connectionLost)
 {
     if(!user)
         return;
@@ -191,13 +195,28 @@ void Server::removeUser(
     m_users.removeAll(
         user);
 
-    qDebug()
+
+    if(connectionLost)
+    {
+        qDebug()
+        << user->username
+        << " connection lost.";
+
+        UserDisconnectedPacket ud;
+        ud.id = user->id;
+        sendToAll(PacketType::UserConnectionLost, PacketHelpers::pack(ud));
+    }
+    else
+    {
+        qDebug()
         << user->username
         << "disconnected";
 
-    UserDisconnectedPacket ud;
-    ud.id = user->id;
-    sendToAll(PacketType::UserDisconnected, PacketHelpers::pack(ud));
+        UserDisconnectedPacket ud;
+        ud.id = user->id;
+        sendToAll(PacketType::UserDisconnected, PacketHelpers::pack(ud));
+
+    }
 
 
     delete user;
@@ -279,12 +298,10 @@ void Server::changeUserStatus(PacketType type , QTcpSocket *socket)
             case PacketType::UserDeafened:
                 us.status=true;
                 usr->deafened=true;
-                qDebug()<<"def statu";
                 break;
             case PacketType::UserUndeafened:
                 us.status=false;
                 usr->deafened=false;
-                qDebug()<<"undef statu";
                 break;
             default:
                 qDebug() << "undefined type for changeUserStatus..";
@@ -315,19 +332,14 @@ bool Server::joinChannel(
 
     if(!target)
     {
-        qDebug()
-        << "channel not found";
-        // broadcastMessage(user,"channel not found.");
-
+        qDebug() << "channel not found";
         return false;
     }
 
     if(target->password
         != password && !target->password.isEmpty())
     {
-        qDebug()
-        << "wrong password";
-        // broadcastMessage(user,"wrong password.");
+        qDebug() << "wrong password";
         return false;
     }
 
