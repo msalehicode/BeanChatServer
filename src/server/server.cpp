@@ -18,14 +18,29 @@ Server::Server(
     :
     QObject(parent)
 {
-    auto lobby =
-        new Channel;
 
-    lobby->id = 1;
+    //create some basic channels
+    auto admins = new Channel;
+    admins->id = 1;
+    admins->name = "Admins";
+    admins->saveChats=true;
+    admins->password="admins";
+    m_channels.push_back(admins);
+
+
+    auto lobby = new Channel;
+    lobby->id = 2;
     lobby->name = "Lobby";
+    m_channels.push_back(lobby);
 
-    m_channels.push_back(
-        lobby);
+
+
+    auto dota2 = new Channel;
+    dota2->id = 3;
+    dota2->name = "Dota2";
+    dota2->saveChats=true;
+    m_channels.push_back(dota2);
+
 }
 
 bool Server::start(

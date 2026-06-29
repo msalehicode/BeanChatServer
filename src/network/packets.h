@@ -302,6 +302,7 @@ struct ChannelCreatedPacket
     quint64 id;
     QString name;
     bool isLocked=false;
+    bool saveChats=false;
 };
 
 inline QDataStream&
@@ -310,7 +311,8 @@ operator<<(QDataStream& out,
 {
     out << p.id
         << p.name
-        << p.isLocked;
+        << p.isLocked
+        << p.saveChats;
 
     return out;
 }
@@ -321,7 +323,8 @@ operator>>(QDataStream& in,
 {
     in >> p.id
         >> p.name
-        >> p.isLocked;
+        >> p.isLocked
+        >> p.saveChats;
 
     return in;
 }

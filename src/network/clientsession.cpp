@@ -274,6 +274,7 @@ void ClientSession::processPacket(
             ChannelCreatedPacket cc;
             cc.id = channelCreated->id;
             cc.name = channelCreated->name;
+            cc.saveChats = channelCreated->saveChats;
 
             if(!channelCreated->password.isNull())
                 cc.isLocked=true;
