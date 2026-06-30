@@ -270,6 +270,127 @@ Channel* Server::findChannelById(quint64 id)
     return nullptr;
 }
 
+QString Server::generateAvatarHash(const QByteArray &avatarData)
+{
+    return QCryptographicHash::hash(avatarData, QCryptographicHash::Sha256).toHex();
+}
+
+QByteArray Server::imageFileToBytes(const QString &path)
+{
+    QFile file(path);
+
+    if (!file.open(QIODevice::ReadOnly))
+        return {};
+
+    return file.readAll();
+}
+
+bool Server::makeAvatarRounded(QByteArray &avatarData, int avatarSize)
+{
+    QImage image;
+
+    if (!image.loadFromData(avatarData))
+        return false;
+
+    // Scale while preserving aspect ratio
+    image = image.scaled(
+        avatarSize,
+        avatarSize,
+        Qt::KeepAspectRatioByExpanding,
+        Qt::SmoothTransformation);
+
+    // Center crop
+    QRect cropRect(
+        (image.width() - avatarSize) / 2,
+        (image.height() - avatarSize) / 2,
+        avatarSize,
+        avatarSize);
+
+    image = image.copy(cropRect);
+
+    // Create transparent destination
+    QImage rounded(
+        avatarSize,
+        avatarSize,
+        QImage::Format_ARGB32_Premultiplied);
+
+    rounded.fill(Qt::transparent);
+
+    QPainter painter(&rounded);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+
+    QPainterPath path;
+    path.addEllipse(rounded.rect());
+
+    painter.setClipPath(path);
+    painter.drawImage(0, 0, image);
+    painter.end();
+
+    // Encode back into the same QByteArray
+    avatarData.clear();
+
+    QBuffer buffer(&avatarData);
+    buffer.open(QIODevice::WriteOnly);
+
+    return rounded.save(&buffer, "PNG");
+}
+
+bool Server::saveAvatarImage(const QString &serverDir, const QString &hash, const QByteArray &avatarData)
+{
+    QDir().mkpath(serverDir);
+
+    QFile file(serverDir + "/" + hash + ".png");
+
+    if (!file.open(QIODevice::WriteOnly))
+        return false;
+
+    file.write(avatarData);
+
+    return true;
+}
+
+bool Server::deleteAvatar(const QString &serverDir, const QString &hash)
+{
+    return QFile::remove(serverDir + "/" + hash + ".png");
+}
+
+QString Server::updateUserAvatar(UserModel* user, const QByteArray &data)
+{
+    QString hash;
+    if(user)
+    {
+
+        hash = generateAvatarHash(data); //generate hash for that avatar data.
+
+        if(saveAvatarImage(avatarDirectoryName,hash,data))
+        {
+            qDebug() <<"avatar saved into server,local files";
+
+            //delete old avatar file (hash.png)
+            if(!deleteAvatar(avatarDirectoryName, user->avatarHash))
+                qWarning() << "warning: couldn't to delete old avatar in server files.";
+
+
+            //check is hash valid
+            if(!hash.isEmpty())
+            {
+                //update user's avatar
+                user->avatarHash = hash;
+                return hash;
+            }
+            else
+                qDebug() << "generated hash is invalid.";
+        }
+        else
+            qDebug() << "faield to save avatar into local files.";
+    }
+    else
+        qDebug() << "invalid user to update avatar.";
+
+    return hash;
+}
+
 int Server::changeUserStatus(PacketType type,
                               UserModel* user)
 {
@@ -417,6 +538,8 @@ QByteArray Server::buildServerState()
         info.username =
             user->username;
 
+        info.avatarHash = user->avatarHash;
+
         info.channelId =
             user->currentChannel
                 ? user->currentChannel->id
@@ -438,8 +561,7 @@ QByteArray Server::buildServerState()
         info.osName= user->osName;
         info.osVersion = user->osVersion;
 
-        qDebug() << "creating state, user " << info.username << " camera is " << info.camera;
-
+        qDebug() << "creating state, user " << info.username << " avatarHash="<< info.avatarHash;
 
 
         state.users.push_back(

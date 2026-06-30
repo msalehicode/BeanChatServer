@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(QT NAMES Qt6 REQUIRED COMPONENTS Core)
-find_package(Qt6 REQUIRED COMPONENTS Core Network Sql)
+find_package(Qt6 REQUIRED COMPONENTS Core Network Sql Gui)
 
 add_executable(BeanChatServer
   src/main.cpp
@@ -45,7 +45,7 @@ target_compile_definitions(BeanChatServer PRIVATE
   UDP_MAX_TIMEOUT_TO_CONNECTION_LOST=10000 #when user dont send 10s pingResponse would assume that connection is lost
 )
 
-target_link_libraries(BeanChatServer Qt6::Core Qt6::Network Qt6::Sql)
+target_link_libraries(BeanChatServer Qt6::Core Qt6::Network Qt6::Sql Qt6::Gui)
 
 # for deploy, to tell where load libraries not system just ../lib, because on runtime it asks for library Qt6Network.so.6!
 set_target_properties(BeanChatServer PROPERTIES

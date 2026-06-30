@@ -27,6 +27,7 @@ public:
 
     QString username;
     QString identity;
+    QString avatarHash; //store generated hash for each avatar
 
     bool isAdmin=true; //false;
 

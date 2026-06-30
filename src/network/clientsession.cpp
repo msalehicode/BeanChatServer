@@ -195,6 +195,7 @@ void ClientSession::handleLogin(const QByteArray& payload)
     UserConnectedPacket uc;
     uc.id = m_user->id;
     uc.username = m_user->username;
+    uc.avatarHash = m_user->avatarHash;
     uc.appVersion = m_user->appVersion;
     uc.buildType = m_user->buildType;
     uc.osName = m_user->osName;
@@ -443,6 +444,94 @@ void ClientSession::processPacket(
         break;
     }
 
+
+
+    case PacketType::RequestAvatars:
+    {
+        //check for user logged in?
+        if(!m_user)
+            break;
+
+        auto p = PacketHelpers::unpack<RequestAvatarsPacket>(packet.payload);
+
+        qDebug() << "request avatars received not found ids count=" << p.notFoundIds.count();
+
+
+        ResponseAvatarsPacket ra;
+
+
+        //find and fill users' avatars
+        UserAvatar temp;
+        for(UserModel* user : m_server->users())
+        {
+            if(p.notFoundIds.contains(user->id))
+            {
+                //reset data.
+                temp.clear();
+
+                //fill data
+                temp.userId = user->id;
+                temp.avatarHash = user->avatarHash;
+                // temp.oldHash = ""; // ------------------- LATER need more work because server sent new hash so if user coulnt find that hash.png in cached so would ask for new avatar so we have a file leak that old hash.png wont delete anytime.
+                temp.imageData = m_server->imageFileToBytes(m_server->avatarDirectoryName+"/"+user->avatarHash+".png");
+                ra.avatars.append(temp);
+            }
+        }
+
+        //send avatars.
+        sendToSender(PacketType::ResponseAvatars, PacketHelpers::pack(ra));
+        qDebug() << "response avatars sent to user.";
+    }break;
+
+    case PacketType::UpdateUserInfo:
+    {
+        //check for user logged in?
+        if(!m_user)
+            break;
+
+        auto p = PacketHelpers::unpack<UpdateUserInfoPacket>(packet.payload);
+
+        qDebug() << "request update my info received update type= "
+                 << static_cast<int>(p.updateType) << "data size: " << p.paylaodData.size();
+
+        switch(p.updateType)
+        {
+            case UpdateUserInfoType::Avatar:
+            {
+                qDebug() << "SERVER: update avatar received size=" << p.paylaodData.size();
+
+                //check data size is valid for avatar?
+                //code here...
+
+                //try to make picture rounded, its better do.
+                if (!m_server->makeAvatarRounded(p.paylaodData))
+                    qWarning() << "Failed to round avatar.";
+                else
+                    qDebug() << "avatar image rounded.";
+
+                QString oldHash = m_user->avatarHash;//to store old hash value to tell users delete this old one from cached files
+                QString hashResult = m_server->updateUserAvatar(m_user,p.paylaodData);
+                //check is generated hash is valid?
+                if(!hashResult.isEmpty())
+                {
+                    //notify everyone a user avatar updated.
+                    UserInfoChangedPacket ui;
+                    ui.userId = m_user->id;
+                    ui.payloadValue = hashResult;
+                    ui.updateType = UpdateUserInfoType::Avatar;
+                    ui.payloadData = p.paylaodData;
+                    ui.payloadSecondValue = oldHash; //to tell users remove old file due to privacy and less cache size on local files
+                    sendToEveryone(PacketType::UserInfoChanged, PacketHelpers::pack(ui));
+                    qDebug() << "notify everyone, user's avatar updated.";
+                }
+                break;
+            }
+            default:
+                qDebug() << "a UpdateUserInfo received but not supported for now, type=" << static_cast<int>(p.updateType);
+                break;
+        }
+
+    }break;
 
 
     default:

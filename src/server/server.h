@@ -13,6 +13,18 @@
 #include "../network/packets.h"
 #include "../network/udpserver.h"
 
+
+#include <QCryptographicHash>
+#include <QFile>
+#include <QDir>
+
+
+//make received avatar rounded
+#include <QImage>
+#include <QPainter>
+#include <QPainterPath>
+#include <QBuffer>
+
 class ClientSession;
 
 class Server : public QObject
@@ -20,6 +32,9 @@ class Server : public QObject
     Q_OBJECT
 
 public:
+    const QString avatarDirectoryName = "avatars";
+
+
     explicit Server(QObject* parent = nullptr);
 
     bool start(quint16 port,
@@ -72,11 +87,23 @@ public:
     bool deleteChannel(Channel *channel);
 
     Channel *findChannelById(quint64 id);
+
+
+
+    //avatar
+    QString generateAvatarHash(const QByteArray& avatarData); // usage:QString hash = generateAvatarHash(imageBytes);
+    QByteArray imageFileToBytes(const QString &path);
+    bool saveAvatarImage(const QString &serverDir, const QString &hash, const QByteArray &avatarData);
+    bool deleteAvatar(const QString &serverDir, const QString &hash);
+    QString updateUserAvatar(UserModel *user, const QByteArray &data); //if succeed reutrns a hash else empty string
+
+    bool makeAvatarRounded(QByteArray &avatarData, int avatarSize=128);
 private slots:
     void onNewConnection();
 
 
 private:
+
     quint64 m_nextUserId = 1;
 
     QTcpServer m_server;

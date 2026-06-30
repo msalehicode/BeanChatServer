@@ -49,6 +49,13 @@ enum class PacketType : quint16
     UserCameraClosed,
 
 
+    //user info
+    RequestAvatars, //user sends those ids has no cached matches for those avatars
+    ResponseAvatars, //server send avatar data for those ids
+
+    UpdateUserInfo, //user sends to ask to update username, avatar, ...
+    UserInfoChanged, //users receive this when someone changed his info
+
     //state
     RequestServerState,
     ServerState, //response to RequestServerState
@@ -181,6 +188,7 @@ struct UserConnectedPacket
 {
     quint64 id;
     QString username;
+    QString avatarHash;
     bool muted=false;
     bool deafened=false;
     bool camera=false;
@@ -201,6 +209,7 @@ operator<<(QDataStream& out,
 {
     out << p.id
         << p.username
+        << p.avatarHash
         << p.muted
         << p.deafened
         << p.camera
@@ -218,6 +227,7 @@ operator>>(QDataStream& in,
 {
     in >> p.id
         >> p.username
+        >> p.avatarHash
         >> p.muted
         >> p.deafened
         >> p.camera
@@ -561,7 +571,7 @@ struct UserInfo
     quint64 id;
 
     QString username;
-
+    QString avatarHash;
 
     quint64 channelId;
 
@@ -585,6 +595,7 @@ operator<<(QDataStream& out,
 {
     out << p.id
         << p.username
+        << p.avatarHash
         << p.channelId
         << p.muted
         << p.deafened
@@ -603,6 +614,7 @@ operator>>(QDataStream& in,
 {
     in >> p.id
         >> p.username
+        >> p.avatarHash
         >> p.channelId
         >> p.muted
         >> p.deafened
@@ -777,6 +789,169 @@ inline QDataStream& operator>>(QDataStream& in,
        >> p.lastPing
        >> p.voicePacketLoss
        >> p.videoPacketLoss;
+
+    return in;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+struct RequestAvatarsPacket
+{
+    QList<quint64> notFoundIds; //list of userId
+};
+
+inline QDataStream& operator<<(QDataStream& out,
+                               const RequestAvatarsPacket& p)
+{
+    out << p.notFoundIds;
+    return out;
+}
+
+inline QDataStream& operator>>(QDataStream& in,
+                               RequestAvatarsPacket& p)
+{
+    in >> p.notFoundIds;
+    return in;
+}
+
+
+struct UserAvatar
+{
+    quint64 userId;
+    QString avatarHash;
+    QString oldHash; //if isn't empty -> to delete old pic in cache user directory
+    QByteArray imageData;
+
+    void clear()
+    {
+        userId=-1;
+        avatarHash.clear();
+        oldHash.clear();
+        imageData.clear();
+    }
+};
+inline QDataStream& operator<<(QDataStream& out,
+                               const UserAvatar& p)
+{
+    out << p.userId
+        << p.avatarHash
+        << p.oldHash
+        << p.imageData;
+
+    return out;
+}
+
+inline QDataStream& operator>>(QDataStream& in,
+                               UserAvatar& p)
+{
+    in >> p.userId
+        >> p.avatarHash
+        >> p.oldHash
+        >> p.imageData;
+
+    return in;
+}
+
+
+struct ResponseAvatarsPacket
+{
+    QList<UserAvatar> avatars; //userId, oldHash, avatarHash, image data
+};
+
+inline QDataStream& operator<<(QDataStream& out,
+                               const ResponseAvatarsPacket& p)
+{
+    out << p.avatars;
+
+    return out;
+}
+
+inline QDataStream& operator>>(QDataStream& in,
+                               ResponseAvatarsPacket& p)
+{
+    in >> p.avatars;
+
+    return in;
+}
+
+
+
+enum class UpdateUserInfoType
+{
+    Username,
+    Description,
+    Identity,
+    Avatar,
+    ActivityStatus
+};
+
+struct UpdateUserInfoPacket
+{
+    UpdateUserInfoType updateType;
+    QString payloadValue;
+    QByteArray paylaodData; //for avatar image.
+};
+
+inline QDataStream& operator<<(QDataStream& out,
+                               const UpdateUserInfoPacket& p)
+{
+    out << p.updateType
+        << p.payloadValue
+        << p.paylaodData;
+
+    return out;
+}
+
+inline QDataStream& operator>>(QDataStream& in,
+                               UpdateUserInfoPacket& p)
+{
+    in >> p.updateType
+        >> p.payloadValue
+        >> p.paylaodData;
+
+    return in;
+}
+
+
+
+struct UserInfoChangedPacket
+{
+    quint64 userId;
+    UpdateUserInfoType updateType;
+    QString payloadValue; //e.g to pass avatar Hash
+    QString payloadSecondValue; //for e.g old hash to tell others delete old avatarHash file
+    QByteArray payloadData; //e.g: for avatar image data.
+};
+
+inline QDataStream& operator<<(QDataStream& out,
+                               const UserInfoChangedPacket& p)
+{
+    out << p.userId
+        << p.updateType
+        << p.payloadValue
+        << p.payloadSecondValue
+        << p.payloadData;
+
+    return out;
+}
+
+inline QDataStream& operator>>(QDataStream& in,
+                               UserInfoChangedPacket& p)
+{
+    in  >> p.userId
+        >> p.updateType
+        >> p.payloadValue
+        >> p.payloadSecondValue
+        >> p.payloadData;
 
     return in;
 }
