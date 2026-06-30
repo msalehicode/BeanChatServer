@@ -28,6 +28,8 @@ public:
     QString username;
     QString identity;
 
+    bool isAdmin=true; //false;
+
 
     QHostAddress udpAddress;
     quint16 udpPort = 0;

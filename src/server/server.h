@@ -67,6 +67,11 @@ public:
     void printChannelWithUsersIn();
 
     void printUsers();
+    Channel *updateChannel(quint64 channelId, const QString &name, const QString &pass, bool saveChats);
+    bool updateChannel(Channel* channel, const QString &name, const QString &pass, bool saveChats);
+    bool deleteChannel(Channel *channel);
+
+    Channel *findChannelById(quint64 id);
 private slots:
     void onNewConnection();
 

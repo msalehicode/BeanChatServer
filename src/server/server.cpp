@@ -202,6 +202,74 @@ Channel* Server::createChannel(
     return channel;
 }
 
+
+Channel*  Server::updateChannel(
+    quint64 channelId,
+    const QString& name,
+    const QString& pass,
+    bool saveChats
+    )
+{
+    Channel* channel = findChannelById(channelId);
+    if(updateChannel(channel,name,pass,saveChats))
+        return channel;
+
+    return nullptr;
+}
+
+bool Server::updateChannel(Channel* channel,
+                   const QString &name,
+                   const QString &pass,
+                   bool saveChats)
+{
+    if(channel)
+    {
+        channel->name = name;
+        if(pass!="***") //pass === "***" -> dont change password.
+            channel->password = pass;
+        channel->saveChats = saveChats;
+
+        return true;
+    }
+    return false;
+}
+
+bool Server::deleteChannel(Channel *channel)
+{
+    if (!channel)
+        return false;
+
+    int index = m_channels.indexOf(channel);
+    if (index == -1)
+        return false;
+
+    //remove all users in this channel
+    for(UserModel* user : channel->users)
+    {
+        qDebug() << "user removed from channel";
+        user->currentChannel = nullptr;
+
+        //in client side when a channel deleted would go and find all users of that channel and remove them from that channel
+    }
+
+    m_channels.removeAt(index);
+    delete channel;
+
+    return true;
+}
+
+
+Channel* Server::findChannelById(quint64 id)
+{
+    for (Channel* channel : m_channels)
+    {
+        if (channel->id == id)
+            return channel;
+    }
+
+    return nullptr;
+}
+
 int Server::changeUserStatus(PacketType type,
                               UserModel* user)
 {

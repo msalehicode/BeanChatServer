@@ -8,21 +8,37 @@ enum class PacketType : quint16
 {
     Invalid = 0,
 
+    //login
     LoginRequest,
     LoginResponse,
 
+
+    //connection
     UserConnected,
     UserDisconnected,
     UserConnectionLost,
 
+
+    //channel
     CreateChannel,
-    JoinChannel,
+    UpdateChannel,
+    DeleteChannel,
 
     ChannelCreated,
-    UserJoinedChannel,
+    ChannelUpdated,
+    ChannelDeleted,
 
     ChatMessage,
 
+
+
+    //join,move
+    UserJoinedChannel,
+    UserMoved,
+    JoinChannel,
+
+
+    //status
     UserMuted ,
     UserUnmuted ,
 
@@ -32,12 +48,11 @@ enum class PacketType : quint16
     UserCameraOpened,
     UserCameraClosed,
 
-    UserMoved,
 
-    ChannelDeleted,
-
+    //state
     RequestServerState,
     ServerState, //response to RequestServerState
+
 
     //udp codes:
     UdpLoginRequest = 100, //when user loginResponse arrived client sends this to server to register udp socket.
@@ -269,6 +284,100 @@ operator>>(QDataStream& in,
 
     return in;
 }
+
+
+struct UpdateChannelPacket
+{
+    quint64 channelId;
+    QString name;
+    QString password;
+    bool saveChats;
+};
+
+inline QDataStream&
+operator<<(QDataStream& out,
+           const UpdateChannelPacket& p)
+{
+    out << p.channelId
+        << p.name
+        << p.password
+        << p.saveChats;
+
+    return out;
+}
+
+inline QDataStream&
+operator>>(QDataStream& in,
+           UpdateChannelPacket& p)
+{
+    in  >> p.channelId
+        >> p.name
+        >> p.password
+        >> p.saveChats;
+
+    return in;
+}
+
+
+
+
+struct ChannelUpdatedPacket
+{
+    quint64 channelId;
+    QString name;
+    bool isLocked;
+    bool saveChats;
+};
+
+inline QDataStream&
+operator<<(QDataStream& out,
+           const ChannelUpdatedPacket& p)
+{
+    out << p.channelId
+        << p.name
+        << p.isLocked
+        << p.saveChats;
+
+    return out;
+}
+
+inline QDataStream&
+operator>>(QDataStream& in,
+           ChannelUpdatedPacket& p)
+{
+    in  >> p.channelId
+        >> p.name
+        >> p.isLocked
+        >> p.saveChats;
+
+    return in;
+}
+
+struct DeleteChannelPacket
+{
+    quint64 channelId;
+};
+
+inline QDataStream&
+operator<<(QDataStream& out,
+           const DeleteChannelPacket& p)
+{
+    out << p.channelId;
+
+    return out;
+}
+
+inline QDataStream&
+operator>>(QDataStream& in,
+           DeleteChannelPacket& p)
+{
+    in  >> p.channelId;
+
+    return in;
+}
+
+
+
 
 
 struct JoinChannelPacket

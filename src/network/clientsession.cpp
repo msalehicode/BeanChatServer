@@ -286,6 +286,90 @@ void ClientSession::processPacket(
         break;
     }
 
+    case PacketType::UpdateChannel:
+    {
+        //check for user logged in?
+        if(!m_user)
+            break;
+
+        auto req = PacketHelpers::unpack<UpdateChannelPacket>(packet.payload);
+
+
+        Channel* channel = m_server->findChannelById(req.channelId);
+
+        //check for has user permission to update this channel
+        if(channel)
+        {
+            // if(channel->owner)
+            {
+                //is this user owner of the channel OR is admin?
+                if(m_user->isAdmin) //|| channel->owner->id == m_user->id)
+                {
+                    //update channel.
+                    if(m_server->updateChannel(channel, req.name, req.password, req.saveChats))
+                    {
+                        ChannelUpdatedPacket c;
+                        c.channelId = channel->id;
+                        c.name = channel->name;
+                        c.isLocked = channel->password.isEmpty() ? false : true;
+                        c.saveChats = channel->saveChats;
+
+                        qDebug() << "channel " << channel->name << "(" << channel->id << ") has updated";
+                        sendToEveryone(PacketType::ChannelUpdated, PacketHelpers::pack(c));
+                    }
+                    else
+                        qDebug() << "failed to update channel.";
+                }
+                else
+                    qDebug() << "insufficient permission to modify this channel";
+            }
+        }
+
+
+        break;
+    }
+
+
+    case PacketType::DeleteChannel:
+    {
+        //check for user logged in?
+        if(!m_user)
+            break;
+
+        auto req = PacketHelpers::unpack<DeleteChannelPacket>(packet.payload);
+
+
+        Channel* channel = m_server->findChannelById(req.channelId);
+
+        //check for has user permission to update this channel
+        if(channel)
+        {
+            // if(channel->owner)
+            {
+                //is this user owner of the channel OR is admin?
+                if(m_user->isAdmin) // || channel->owner->id == m_user->id)
+                {
+                    //delete channel.
+                    if(m_server->deleteChannel(channel)) //watch out, we deleted channel pointer too
+                    {
+                        DeleteChannelPacket c;
+                        c.channelId = req.channelId;
+
+                        qDebug() << "channel " << req.channelId << " deleted";
+                        sendToEveryone(PacketType::ChannelDeleted, PacketHelpers::pack(c));
+                    }
+                    else
+                        qDebug() << "failed to update channel.";
+                }
+                else
+                    qDebug() << "insufficient permission to modify this channel";
+            }
+        }
+
+        break;
+    }
+
+
     case PacketType::JoinChannel:
     {
         //check for user logged in?
