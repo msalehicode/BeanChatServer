@@ -34,6 +34,8 @@ target_compile_definitions(BeanChatServer PRIVATE
 
   DATABASE_FILE_NAME="server.db"
 
+  SERVER_VERSION="0.14.0"
+
   #default port
   DEFAULT_PORT=9987
 

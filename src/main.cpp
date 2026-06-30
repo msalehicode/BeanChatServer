@@ -45,6 +45,7 @@ int main(
         return -1;
     }
 
+    qInfo() << "server version is: " << SERVER_VERSION;
     qInfo() << "Server is running...";
 
     return app.exec();
