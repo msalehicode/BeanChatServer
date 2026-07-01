@@ -33,9 +33,11 @@ enum class PacketType : quint16
 
 
     //join,move
-    UserJoinedChannel,
-    UserMoved,
     JoinChannel,
+    UserJoinedChannel,
+
+    MoveUser,
+    UserMoved,
 
 
     //status
@@ -100,6 +102,35 @@ operator>>(QDataStream& in,
 }
 
 
+
+struct MoveUserPacket
+{
+    quint64 userId;
+    quint64 channelId;
+    QString channelPassword="";
+};
+
+inline QDataStream&
+operator<<(QDataStream& out,
+           const MoveUserPacket& p)
+{
+    out << p.userId
+        << p.channelId
+        << p.channelPassword;
+
+    return out;
+}
+
+inline QDataStream&
+operator>>(QDataStream& in,
+           MoveUserPacket& p)
+{
+    in >> p.userId
+       >> p.channelId
+       >> p.channelPassword;
+
+    return in;
+}
 
 
 

@@ -135,15 +135,12 @@ UserModel* Server::loginUser(
     return user;
 }
 
-UserModel *Server::findUser(QTcpSocket *socket)
+UserModel *Server::findUser(quint64 userId)
 {
     for(UserModel* usr : m_users)
     {
-        if(usr->socket->peerAddress().toString() == socket->peerAddress().toString()
-            && usr->socket->peerPort() == socket->peerPort())
-        {
+        if(usr->id == userId)
             return usr;
-        }
     }
     return nullptr;
 }

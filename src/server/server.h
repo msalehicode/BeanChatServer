@@ -98,6 +98,7 @@ public:
     QString updateUserAvatar(UserModel *user, const QByteArray &data); //if succeed reutrns a hash else empty string
 
     bool makeAvatarRounded(QByteArray &avatarData, int avatarSize=128);
+    UserModel *findUser(quint64 userId);
 private slots:
     void onNewConnection();
 

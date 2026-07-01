@@ -370,6 +370,61 @@ void ClientSession::processPacket(
         break;
     }
 
+    case PacketType::MoveUser:
+    {
+        //check for user logged in?
+        if(!m_user)
+            break;
+
+        auto req = PacketHelpers::unpack<MoveUserPacket>(packet.payload);
+
+        //prevent selfmove,
+        if(req.userId == m_user->id)
+        {
+            QByteArray channelResponse = m_server->joinChannel(m_user, req.channelId, req.channelPassword);
+            if(channelResponse.isEmpty())
+            {
+                qDebug() << "notify user, channel not found or password is incorrect";
+                break;
+            }
+
+            sendToEveryone(PacketType::UserJoinedChannel, channelResponse);
+
+            m_server->printChannelWithUsersIn();
+            break;
+        }
+
+
+
+        //check permission
+        if(m_user->isAdmin)
+        {
+            UserModel* targetUser = m_server->findUser(req.userId);
+            if(targetUser)
+            {
+                QByteArray channelResponse = m_server->joinChannel(targetUser, req.channelId, req.channelPassword);
+                if(channelResponse.isEmpty())
+                {
+                    qDebug() << "notify user, channel not found or password is incorrect";
+                    break;
+                }
+
+                sendToEveryone(PacketType::UserMoved, channelResponse);
+
+                m_server->printChannelWithUsersIn();
+            }
+            else
+                qDebug() << "invalid user to move";
+
+        }
+        else
+            qDebug() << "dont have permission to move user.";
+
+
+
+        break;
+    }
+
 
     case PacketType::JoinChannel:
     {
@@ -382,7 +437,7 @@ void ClientSession::processPacket(
         QByteArray channelResponse = m_server->joinChannel(m_user, req.channelId, req.password);
         if(channelResponse.isEmpty())
         {
-            qDebug() << "notify user channel not found or password is incorrect";
+            qDebug() << "notify user, channel not found or password is incorrect";
             break;
         }
 
