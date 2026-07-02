@@ -237,7 +237,6 @@ void ClientSession::processPacket(
             break;
 
         auto req = PacketHelpers::unpack<UserStatusChangedPacket>(packet.payload);
-
         //check if user status changed?
         bool status = m_server->changeUserStatus(packet.type, m_user);
         if(status == 0 || status == 1)
@@ -245,7 +244,10 @@ void ClientSession::processPacket(
             //send change to everyone
             UserStatusChangedPacket us;
             us.userId=m_user->id;
-            us.userChannelId=m_user->currentChannel->id;
+            if(m_user->currentChannel)
+                us.userChannelId=m_user->currentChannel->id;
+            else
+                us.userChannelId=-1;
             us.status= status;
             sendToEveryone(packet.type, PacketHelpers::pack(us));
         }
