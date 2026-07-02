@@ -3,6 +3,14 @@
 #include <QString>
 #include <QDataStream>
 #include <QDateTime>
+#include <limits>
+
+
+//when user don't find server's avatarHash \
+    would send RequestAvatars and if inside that list userId was equal to this \
+    server return this code as userId and fill avatarHash, avatarData as response.
+constexpr quint64 RESERVED_TO_ASK_SERVERS_AVATAR =
+    std::numeric_limits<quint64>::max()-1;
 
 enum class PacketType : quint16
 {
@@ -659,11 +667,66 @@ operator>>(QDataStream& in,
     return in;
 }
 
+struct ServerInfo
+{
+    QString name;
+    QString version;
+    QString website;
+    QDateTime startTime;
+
+    //store server's avatarHash, if user couldn't find that hash in cached acatars would ask for avatar.
+    //and would store inside user's servers directory
+    QString avatarHash;
+    QString oldAvatarHash; //when avatar changed to tell users delete old avatar
+
+    bool operator==(const ServerInfo &other) const
+    {
+        return name == other.name &&
+               version == other.version &&
+               website == other.website &&
+               startTime == other.startTime &&
+               avatarHash == other.avatarHash &&
+               oldAvatarHash == other.oldAvatarHash;
+    }
+
+    bool operator!=(const ServerInfo &other) const
+    {
+        return !(*this == other);
+    }
+};
+
+
+inline QDataStream& operator<<(QDataStream& out,
+                               const ServerInfo& p)
+{
+    out << p.name
+        << p.version
+        << p.website
+        << p.avatarHash
+        << p.oldAvatarHash
+        << p.startTime;
+
+    return out;
+}
+
+inline QDataStream& operator>>(QDataStream& in,
+                               ServerInfo& p)
+{
+     in >> p.name
+        >> p.version
+        >> p.website
+        >> p.avatarHash
+        >> p.oldAvatarHash
+        >> p.startTime;
+
+    return in;
+}
+
 
 struct ServerStatePacket
 {
+    ServerInfo serverInfo;
     QList<ChannelInfo> channels;
-
     QList<UserInfo> users;
 };
 
@@ -672,7 +735,8 @@ inline QDataStream&
 operator<<(QDataStream& out,
            const ServerStatePacket& p)
 {
-    out << p.channels
+    out << p.serverInfo
+        << p.channels
         << p.users;
 
     return out;
@@ -682,7 +746,8 @@ inline QDataStream&
 operator>>(QDataStream& in,
            ServerStatePacket& p)
 {
-    in >> p.channels
+    in  >> p.serverInfo
+        >> p.channels
         >> p.users;
 
     return in;

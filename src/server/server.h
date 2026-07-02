@@ -77,16 +77,19 @@ public:
 
     QByteArray buildServerState();
 
+
+    //prints
     void printChannels();
-
     void printChannelWithUsersIn();
-
     void printUsers();
+
+
     Channel *updateChannel(quint64 channelId, const QString &name, const QString &pass, bool saveChats);
     bool updateChannel(Channel* channel, const QString &name, const QString &pass, bool saveChats);
     bool deleteChannel(Channel *channel);
 
     Channel *findChannelById(quint64 id);
+    UserModel *findUser(quint64 userId);
 
 
 
@@ -98,12 +101,15 @@ public:
     QString updateUserAvatar(UserModel *user, const QByteArray &data); //if succeed reutrns a hash else empty string
 
     bool makeAvatarRounded(QByteArray &avatarData, int avatarSize=128);
-    UserModel *findUser(quint64 userId);
+    QString platformName();
+    ServerInfo* info();
+
 private slots:
     void onNewConnection();
 
 
 private:
+    ServerInfo m_info;
 
     quint64 m_nextUserId = 1;
 

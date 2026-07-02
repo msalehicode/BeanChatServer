@@ -511,14 +511,30 @@ void ClientSession::processPacket(
 
         qDebug() << "request avatars received not found ids count=" << p.notFoundIds.count();
 
-
         ResponseAvatarsPacket ra;
 
 
         //find and fill users' avatars
         UserAvatar temp;
+
+        //if userId is RESERVED_TO_ASK_SERVERS_AVATAR, means user asked server's avatar
+        if(p.notFoundIds.contains(RESERVED_TO_ASK_SERVERS_AVATAR))
+        {
+            ServerInfo* serverInfo = m_server->info();
+            if(serverInfo)
+            {
+                temp.userId=RESERVED_TO_ASK_SERVERS_AVATAR;
+                temp.avatarHash=serverInfo->avatarHash;
+                temp.imageData = m_server->imageFileToBytes(m_server->avatarDirectoryName+"/"+serverInfo->avatarHash+".png");
+                temp.oldHash= serverInfo->oldAvatarHash;//to tell users delete this old avatar
+                qDebug() << "user asked servers avatar. filled fine :)";
+                ra.avatars.append(temp);
+            }
+        }
+
         for(UserModel* user : m_server->users())
         {
+            //find asked users by their Id
             if(p.notFoundIds.contains(user->id))
             {
                 //reset data.

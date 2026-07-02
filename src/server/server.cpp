@@ -19,7 +19,10 @@ Server::Server(
     QObject(parent)
 {
 
-    //create some basic channels
+    //read channels from database
+    //code here
+
+    //create channels
     auto admins = new Channel;
     admins->id = 1;
     admins->name = "Admins";
@@ -34,14 +37,43 @@ Server::Server(
     m_channels.push_back(lobby);
 
 
-
     auto dota2 = new Channel;
     dota2->id = 3;
     dota2->name = "Dota2";
     dota2->saveChats=true;
     m_channels.push_back(dota2);
 
+
+
+    //read saved server info
+    //code here
+
+    //set server info
+    m_info.version="v"+QString::fromUtf8(SERVER_VERSION) + " on " + platformName();
+    m_info.name="BeanChat Server";
+    m_info.website="https://example.com";
+    m_info.avatarHash="782f57381bb2e4678376cdd49dfe7afc6e3f6041689803af8fdd5bf7bdc9542d";
+    m_info.startTime=QDateTime::currentDateTimeUtc();
 }
+
+QString Server::platformName()
+{
+    #ifdef Q_OS_ANDROID
+        return "Android";
+    #elif defined(Q_OS_WIN)
+        return "Windows";
+    #elif defined(Q_OS_IOS)
+        return "IOS";
+    #elif defined(Q_OS_MACOS)
+        return "MacOS";
+    #elif defined(Q_OS_LINUX)
+        return "Linux";
+    #elif
+    #else
+        return "Unknown";
+    #endif
+}
+
 
 bool Server::start(
     quint16 port, quint16 udpPort)
@@ -95,6 +127,11 @@ void Server::onNewConnection()
     }
 }
 
+ServerInfo* Server::info()
+{
+    return &m_info;
+}
+
 UserModel* Server::loginUser(
     const LoginRequestPacket& req,
     QTcpSocket* socket)
@@ -121,12 +158,6 @@ UserModel* Server::loginUser(
     user->connectedSince = QDateTime::currentSecsSinceEpoch();
 
     user->currentChannel=nullptr;
-    //dont set a channel to user.
-    // user->currentChannel =
-    //     m_channels.first();
-    // user->currentChannel
-    //     ->users
-    //     .push_back(user);
 
     m_users.push_back(user);
 
@@ -358,6 +389,13 @@ QString Server::updateUserAvatar(UserModel* user, const QByteArray &data)
     if(user)
     {
 
+        //here needs improvement
+        //code here
+        //two user or morecna have same image so server make hash for that image when one of them change avatar would ask for delete old pic so other would be avatar less.
+        //when someone changed their avatar would store oldHash and tell other users remove this avatarHash!
+
+
+
         hash = generateAvatarHash(data); //generate hash for that avatar data.
 
         if(saveAvatarImage(avatarDirectoryName,hash,data))
@@ -513,6 +551,10 @@ QByteArray Server::buildServerState()
 {
     ServerStatePacket state;
 
+    //fill serverInfo
+    state.serverInfo = m_info;
+
+    //channels
     for(auto channel : m_channels)
     {
         ChannelInfo info;
@@ -525,6 +567,8 @@ QByteArray Server::buildServerState()
         state.channels.push_back(info);
     }
 
+
+    //users
     for(auto user : m_users)
     {
         UserInfo info;
