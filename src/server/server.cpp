@@ -513,7 +513,7 @@ QByteArray Server::joinChannel(
     }
 
     //check if user had a current channel, then remove him from that channel
-    quint64 userOldChannel=-1;
+    quint64 userOldChannel=0;
     if(user->currentChannel)
     {
         userOldChannel = user->currentChannel->id;
