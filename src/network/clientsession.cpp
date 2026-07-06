@@ -1,15 +1,5 @@
 #include "clientsession.h"
 
-#include "../network/packethelpers.h"
-#include "../network/packets.h"
-
-#include "../server/server.h"
-
-#include "../models/user.h"
-
-#include <QDebug>
-
-constexpr quint32 tcpMaxPacketSize = 50 * 1024 * 1024; // 50 MB
 
 ClientSession::ClientSession(
     QTcpSocket* socket,
@@ -129,7 +119,7 @@ void ClientSession::onReadyRead()
         header >> size;
 
         //check for packet size dont exceed from the max size
-        if (size > tcpMaxPacketSize)
+        if (size > BeanChatCommon::ProtocolLimits::MaxPacketSize)
         {
             qWarning() << "Packet too large from " << m_socket->peerAddress();
             forceDisconnect(false);
@@ -559,12 +549,12 @@ void ClientSession::processPacket(
         UserAvatar temp;
 
         //if userId is RESERVED_TO_ASK_SERVERS_AVATAR, means user asked server's avatar
-        if(p.notFoundIds.contains(RESERVED_TO_ASK_SERVERS_AVATAR))
+        if(p.notFoundIds.contains(BeanChatCommon::ReservedIds::ServerAvatar))
         {
             ServerInfo* serverInfo = m_server->info();
             if(serverInfo)
             {
-                temp.userId=RESERVED_TO_ASK_SERVERS_AVATAR;
+                temp.userId=BeanChatCommon::ReservedIds::ServerAvatar;
                 temp.avatarHash=serverInfo->avatarHash;
                 temp.imageData = m_server->imageFileToBytes(m_server->avatarDirectoryName+"/"+serverInfo->avatarHash+".png");
                 temp.oldHash= serverInfo->oldAvatarHash;//to tell users delete this old avatar
@@ -654,7 +644,7 @@ void ClientSession::processPacket(
 
 void ClientSession::forceDisconnect(bool connectionLost)
 {
-    qDebug() << "force disconnect user due to (connection lost) or (he sent a packet which hits tcpMaxPacketSize).";
+    qDebug() << "force disconnect user due to (connection lost) or (he sent a packet which hits ProtocolLimits::MaxPacketSize).";
     m_connectionLost=connectionLost;
     m_socket->disconnectFromHost();
 }

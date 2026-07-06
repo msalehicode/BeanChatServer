@@ -1,13 +1,5 @@
 #include "udpserver.h"
-
 #include "../server/server.h"
-#include "../models/user.h"
-#include "../models/channel.h"
-
-#include "voicepackets.h"
-
-#include <QNetworkDatagram>
-#include <QDebug>
 
 UdpServer::UdpServer(
     Server* server,

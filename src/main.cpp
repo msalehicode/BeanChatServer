@@ -2,6 +2,7 @@
 
 #include "models/database.h"
 #include "server/server.h"
+#include <protocol/ProtocolVersion.h>
 
 int main(
     int argc,
@@ -48,5 +49,6 @@ int main(
     qInfo() << "server version is: " << SERVER_VERSION;
     qInfo() << "Server is running...";
 
+    qInfo() << "using BeanChatCommon version " << BeanChatCommon::Protocol::Version;
     return app.exec();
 }

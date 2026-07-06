@@ -2,6 +2,10 @@
 
 #include <QObject>
 #include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QSqlError>
+#include <QDebug>
+
 #include "channel.h"
 #include "user.h"
 

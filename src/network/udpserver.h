@@ -6,7 +6,16 @@
 #include <QTimer>
 #include <QDateTime>
 
+#include <QDebug>
+#include <QNetworkDatagram>
+
 #include "../models/user.h"
+#include "../models/channel.h"
+
+#include <protocol/Packets.h>
+using namespace BeanChatCommon;
+
+
 
 class Server;
 

@@ -3,7 +3,19 @@
 #include <QObject>
 #include <QTcpSocket>
 
-#include "../network/packet.h"
+//from BeanChatCommon
+#include <protocol/Packet.h>
+#include <protocol/Packets.h>
+#include <protocol/PacketHelpers.h>
+#include <protocol/ProtocolLimits.h>
+#include <protocol/ProtocolVersion.h>
+using namespace BeanChatCommon;
+
+
+#include "../server/server.h"
+#include "../models/user.h"
+
+#include <QDebug>
 
 #include <QVersionNumber>
 

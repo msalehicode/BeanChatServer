@@ -8,25 +8,42 @@
 #include <QList>
 #include <QHash>
 
-#include "../models/user.h"
-#include "../models/channel.h"
-#include "../network/packets.h"
-#include "../network/udpserver.h"
+#include <QDateTime>
+#include <QDebug>
+
+#include <QSqlQuery>
+#include <QVariant>
 
 
 #include <QCryptographicHash>
 #include <QFile>
 #include <QDir>
 
+#include "../models/user.h"
+#include "../models/channel.h"
+#include "../models/database.h"
+
+#include "../network/clientsession.h"
+
+#include "../models/user.h"
+#include "../models/channel.h"
+#include "../network/udpserver.h"
+
+//from BeanChatCommon
+#include <protocol/Packet.h>
+#include <protocol/Packets.h>
+#include <protocol/PacketHelpers.h>
+using namespace BeanChatCommon;
+
+
+#include <QVersionNumber>
 
 //make received avatar rounded
 #include <QImage>
 #include <QPainter>
 #include <QPainterPath>
 #include <QBuffer>
-#include <QVersionNumber>
 
-#include "../models/database.h"
 
 class ClientSession;
 

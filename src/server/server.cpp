@@ -1,18 +1,5 @@
 #include "server.h"
 
-#include "../network/clientsession.h"
-
-#include "../models/user.h"
-#include "../models/channel.h"
-
-#include "../network/packethelpers.h"
-
-#include <QDateTime>
-#include <QDebug>
-
-#include <QSqlQuery>
-#include <QVariant>
-
 Server::Server(Database *db,
                QObject* parent)
     :

@@ -1,9 +1,5 @@
 #include "database.h"
 
-#include <QSqlQuery>
-#include <QSqlError>
-#include <QDebug>
-
 Database::Database()
 {
 }

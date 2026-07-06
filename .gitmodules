@@ -1,0 +1,3 @@
+[submodule "BeanChatCommon"]
+	path = BeanChatCommon
+	url = git@github.com:msalehicode/BeanChatCommon.git
