@@ -33,8 +33,10 @@ add_executable(BeanChatServer
 target_compile_definitions(BeanChatServer PRIVATE
 
   DATABASE_FILE_NAME="server.db"
+  AVATARS_DIRECTORY_NAME="avatars"
 
   SERVER_VERSION="0.16.0"
+  CLIENT_MINIMUM_VERSION="0.19.10"
 
   #default port
   DEFAULT_PORT=9987

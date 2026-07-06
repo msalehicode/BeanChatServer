@@ -227,6 +227,7 @@ struct UserConnectedPacket
 {
     quint64 id;
     QString username;
+    QString identity;
     QString avatarHash;
     bool muted=false;
     bool deafened=false;
@@ -248,6 +249,7 @@ operator<<(QDataStream& out,
 {
     out << p.id
         << p.username
+        << p.identity
         << p.avatarHash
         << p.muted
         << p.deafened
@@ -266,6 +268,7 @@ operator>>(QDataStream& in,
 {
     in >> p.id
         >> p.username
+        >> p.identity
         >> p.avatarHash
         >> p.muted
         >> p.deafened
@@ -610,6 +613,7 @@ struct UserInfo
     quint64 id;
 
     QString username;
+    QString identity;
     QString avatarHash;
 
     quint64 channelId;
@@ -634,6 +638,7 @@ operator<<(QDataStream& out,
 {
     out << p.id
         << p.username
+        << p.identity
         << p.avatarHash
         << p.channelId
         << p.muted
@@ -653,6 +658,7 @@ operator>>(QDataStream& in,
 {
     in >> p.id
         >> p.username
+        >> p.identity
         >> p.avatarHash
         >> p.channelId
         >> p.muted

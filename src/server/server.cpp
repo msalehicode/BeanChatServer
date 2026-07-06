@@ -20,10 +20,6 @@ Server::Server(Database *db,
     QObject(parent)
 {
     //read channels from database
-    if(!m_db->open())
-    {
-        qFatal("Failed to open database.");
-    }
     m_channels = m_db->loadChannels();
     printChannels();
 
@@ -119,13 +115,15 @@ UserModel* Server::loginUser(
     const LoginRequestPacket& req,
     QTcpSocket* socket)
 {
-    //set essential data from this user, if needed to ban
+
+    //check is identity is valid?
+    //code here.
+
+    //make user to pass to m_db->login for accept or reject
     auto user = new UserModel;
-
+    user->username = req.username;
     user->identity = req.identity;
-
     user->socket = socket;
-
     user->ip =socket->peerAddress().toString();
     user->port =socket->peerPort();
     user->appVersion = req.appVersion;
@@ -134,28 +132,30 @@ UserModel* Server::loginUser(
     user->machineName = req.machineName;
     user->osName = req.osName;
     user->osVersion = req.osVersion;
-
-    user->id =m_nextUserId++;
-    user->username = req.username;
-
     user->connectedSince = QDateTime::currentSecsSinceEpoch();
-
     user->currentChannel=nullptr;
 
-    m_users.push_back(user);
-
-    qDebug() << req.username << "logged in";
-
-    //check does this user own a channel?! if yes update that channel's owner pointer
-    for(Channel* channel : m_channels)
+    //check if user exists set data to user-> else insert and set to user-> if had sql error return false
+    if(m_db->loginUser(user))
     {
-        if(channel->ownerIdentity == user->identity)
+        m_users.push_back(user);
+        qDebug() << req.username << "logged in";
+
+        //check does this user own a channel?! if yes update that channel's owner pointer
+        for(Channel* channel : m_channels)
         {
-            channel->owner = user;
+            if(channel->ownerIdentity == user->identity)
+            {
+                channel->owner = user;
+            }
         }
+
+        return user;
     }
 
-    return user;
+    delete user;
+    qDebug() << "failed to login user, database returned false.";
+    return nullptr;
 }
 
 UserModel *Server::findUser(quint64 userId)
@@ -166,6 +166,16 @@ UserModel *Server::findUser(quint64 userId)
             return usr;
     }
     return nullptr;
+}
+
+bool Server::isIdentityInUse(const QString &identity)
+{
+    for(UserModel* usr : m_users)
+    {
+        if(usr->identity == identity)
+            return true;
+    }
+    return false;
 }
 
 void Server::removeUser(UserModel *user)
@@ -414,18 +424,12 @@ QString Server::updateUserAvatar(UserModel* user, const QByteArray &data)
     if(user)
     {
 
-        //here needs improvement
-        //code here
-        //two user or morecna have same image so server make hash for that image when one of them change avatar would ask for delete old pic so other would be avatar less.
-        //when someone changed their avatar would store oldHash and tell other users remove this avatarHash!
-
-
-
         hash = generateAvatarHash(data); //generate hash for that avatar data.
 
         if(saveAvatarImage(avatarDirectoryName,hash,data))
         {
             qDebug() <<"avatar saved into server,local files";
+
 
             //delete old avatar file (hash.png)
             if(!deleteAvatar(avatarDirectoryName, user->avatarHash))
@@ -437,6 +441,14 @@ QString Server::updateUserAvatar(UserModel* user, const QByteArray &data)
             {
                 //update user's avatar
                 user->avatarHash = hash;
+
+                //update user's avatarHash in database
+                m_db->updateUserField(
+                    user->identity,
+                    UserField::AvatarHash,
+                    hash);
+
+
                 return hash;
             }
             else
@@ -603,6 +615,9 @@ QByteArray Server::buildServerState()
 
         info.username =
             user->username;
+
+        info.identity =
+            user->identity;
 
         info.avatarHash = user->avatarHash;
 

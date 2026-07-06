@@ -5,6 +5,8 @@
 
 #include "../network/packet.h"
 
+#include <QVersionNumber>
+
 class Server;
 class UserModel;
 
@@ -27,6 +29,8 @@ public:
     void sendToEveryoneExceptSender(PacketType type, const QByteArray& payload);
 
     void forceDisconnect(bool connectionLost);
+
+    QString formatRemainingTime(qint64 seconds);
 private slots:
     void onReadyRead();
     void onDisconnected();

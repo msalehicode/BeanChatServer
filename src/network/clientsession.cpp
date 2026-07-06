@@ -159,24 +159,65 @@ void ClientSession::handleLogin(const QByteArray& payload)
 
     qDebug() << "login user...";
 
-    //check user veriosn compatibility?
-    //code here
 
-    //authentication
+    //check user veriosn is compatible?
+    QVersionNumber clientVersion = QVersionNumber::fromString(req.appVersion);
+    if(clientVersion < m_server->minimumVersion)
+    {
+        qDebug() << "Client version too old.";
+
+        LoginResponsePacket resp;
+        resp.accepted = false;
+        resp.message = "Please update BeanChat, the server accepts minimum version "CLIENT_MINIMUM_VERSION;
+        sendToSender(PacketType::LoginResponse, PacketHelpers::pack(resp));
+
+        return;
+    }
+
+
+    //reject empty username or identity
     if(req.username.isEmpty() || req.identity.isEmpty())
     {
         LoginResponsePacket resp;
         resp.accepted=false;
-        resp.message="login failed due to username or identity is empty.";
+        resp.message="Please fill your username or identity.";
         sendToSender(PacketType::LoginResponse, PacketHelpers::pack(resp));
         return;
     }
+
+    //reject duplicated identity
+    if(m_server->isIdentityInUse(req.identity))
+    {
+        LoginResponsePacket resp;
+        resp.accepted=false;
+        resp.message="Identity is being used by someone else.";
+        sendToSender(PacketType::LoginResponse, PacketHelpers::pack(resp));
+        return;
+    }
+
+
 
 
     m_user = m_server->loginUser(req,m_socket);
     if(!m_user)
     {
         qDebug() << "faild to loginUser. server returnes null user.";
+        LoginResponsePacket resp;
+        resp.accepted = false;
+        resp.message = "failed to login, server interal error.";
+        sendToSender(PacketType::LoginResponse, PacketHelpers::pack(resp));
+        return;
+    }
+
+    //check is user banned?
+    if(m_user->banned)
+    {
+        qint64 remaining = m_user->banExpiresAt - QDateTime::currentSecsSinceEpoch();
+
+        LoginResponsePacket resp;
+        resp.accepted = false;
+        resp.message = "You are banned. Come back in " + formatRemainingTime(remaining)+".";
+        sendToSender(PacketType::LoginResponse, PacketHelpers::pack(resp));
         return;
     }
 
@@ -195,6 +236,7 @@ void ClientSession::handleLogin(const QByteArray& payload)
     UserConnectedPacket uc;
     uc.id = m_user->id;
     uc.username = m_user->username;
+    uc.identity = m_user->identity;
     uc.avatarHash = m_user->avatarHash;
     uc.appVersion = m_user->appVersion;
     uc.buildType = m_user->buildType;
@@ -615,6 +657,38 @@ void ClientSession::forceDisconnect(bool connectionLost)
     qDebug() << "force disconnect user due to (connection lost) or (he sent a packet which hits tcpMaxPacketSize).";
     m_connectionLost=connectionLost;
     m_socket->disconnectFromHost();
+}
+
+QString ClientSession::formatRemainingTime(qint64 seconds)
+{
+    if (seconds <= 0)
+        return "Expired";
+
+    int days = seconds / 86400;
+    seconds %= 86400;
+
+    int hours = seconds / 3600;
+    seconds %= 3600;
+
+    int minutes = seconds / 60;
+
+    if (days > 0)
+        return QString("%1 day%2 %3 hour%4")
+            .arg(days)
+            .arg(days == 1 ? "" : "s")
+            .arg(hours)
+            .arg(hours == 1 ? "" : "s");
+
+    if (hours > 0)
+        return QString("%1 hour%2 %3 minute%4")
+            .arg(hours)
+            .arg(hours == 1 ? "" : "s")
+            .arg(minutes)
+            .arg(minutes == 1 ? "" : "s");
+
+    return QString("%1 minute%2")
+        .arg(minutes)
+        .arg(minutes == 1 ? "" : "s");
 }
 
 

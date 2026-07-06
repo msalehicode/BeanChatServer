@@ -24,6 +24,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QBuffer>
+#include <QVersionNumber>
 
 #include "../models/database.h"
 
@@ -34,8 +35,8 @@ class Server : public QObject
     Q_OBJECT
 
 public:
-    const QString avatarDirectoryName = "avatars";
-
+    const QString avatarDirectoryName = AVATARS_DIRECTORY_NAME;
+    const QVersionNumber minimumVersion = QVersionNumber::fromString(CLIENT_MINIMUM_VERSION);
 
     explicit Server(Database* db, QObject* parent = nullptr);
 
@@ -92,6 +93,7 @@ public:
 
     Channel *findChannelById(quint64 id);
     UserModel *findUser(quint64 userId);
+    bool isIdentityInUse(const QString& identity);
 
 
 
