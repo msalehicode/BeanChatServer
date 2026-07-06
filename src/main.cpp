@@ -36,7 +36,7 @@ int main(
         return -1;
     }
 
-    Server server;
+    Server server(&database);
 
     if(!server.start(port,port)) //tcp, udp are using the same port number
     {

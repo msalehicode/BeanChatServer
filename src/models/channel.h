@@ -2,6 +2,7 @@
 
 #include <QString>
 #include <QList>
+#include <QDateTime>
 
 class UserModel;
 
@@ -16,6 +17,10 @@ public:
     QString password;
 
     UserModel* owner=nullptr;
+    QString ownerIdentity;
+    int displayOrder = 0;
+    QDateTime createdAt;
+    QDateTime updatedAt;
 
     bool saveChats = false;
 

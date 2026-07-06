@@ -283,9 +283,10 @@ void ClientSession::processPacket(
                 cc.isLocked=true;
 
             sendToEveryone(PacketType::ChannelCreated, PacketHelpers::pack(cc));
+
+            m_server->printChannels();
         }
 
-        m_server->printChannels();
         break;
     }
 
@@ -303,29 +304,27 @@ void ClientSession::processPacket(
         //check for has user permission to update this channel
         if(channel)
         {
-            // if(channel->owner)
+            //is this user owner of the channel OR is admin?
+            if(m_user->isAdmin
+                || (channel->owner ? channel->owner == m_user : false))
             {
-                //is this user owner of the channel OR is admin?
-                if(m_user->isAdmin) //|| channel->owner->id == m_user->id)
+                //update channel.
+                if(m_server->updateChannel(channel, req.name, req.password, req.saveChats))
                 {
-                    //update channel.
-                    if(m_server->updateChannel(channel, req.name, req.password, req.saveChats))
-                    {
-                        ChannelUpdatedPacket c;
-                        c.channelId = channel->id;
-                        c.name = channel->name;
-                        c.isLocked = channel->password.isEmpty() ? false : true;
-                        c.saveChats = channel->saveChats;
+                    ChannelUpdatedPacket c;
+                    c.channelId = channel->id;
+                    c.name = channel->name;
+                    c.isLocked = channel->password.isEmpty() ? false : true;
+                    c.saveChats = channel->saveChats;
 
-                        qDebug() << "channel " << channel->name << "(" << channel->id << ") has updated";
-                        sendToEveryone(PacketType::ChannelUpdated, PacketHelpers::pack(c));
-                    }
-                    else
-                        qDebug() << "failed to update channel.";
+                    qDebug() << "channel " << channel->name << "(" << channel->id << ") has updated";
+                    sendToEveryone(PacketType::ChannelUpdated, PacketHelpers::pack(c));
                 }
                 else
-                    qDebug() << "insufficient permission to modify this channel";
+                    qDebug() << "failed to update channel.";
             }
+            else
+                qDebug() << "insufficient permission to modify this channel";
         }
 
 
@@ -347,26 +346,24 @@ void ClientSession::processPacket(
         //check for has user permission to update this channel
         if(channel)
         {
-            // if(channel->owner)
+            //is this user owner of the channel OR is admin?
+            if(m_user->isAdmin
+                || (channel->owner ? channel->owner == m_user : false))
             {
-                //is this user owner of the channel OR is admin?
-                if(m_user->isAdmin) // || channel->owner->id == m_user->id)
+                //delete channel.
+                if(m_server->deleteChannel(channel)) //watch out, we deleted channel pointer too
                 {
-                    //delete channel.
-                    if(m_server->deleteChannel(channel)) //watch out, we deleted channel pointer too
-                    {
-                        DeleteChannelPacket c;
-                        c.channelId = req.channelId;
+                    DeleteChannelPacket c;
+                    c.channelId = req.channelId;
 
-                        qDebug() << "channel " << req.channelId << " deleted";
-                        sendToEveryone(PacketType::ChannelDeleted, PacketHelpers::pack(c));
-                    }
-                    else
-                        qDebug() << "failed to update channel.";
+                    qDebug() << "channel " << req.channelId << " deleted";
+                    sendToEveryone(PacketType::ChannelDeleted, PacketHelpers::pack(c));
                 }
                 else
-                    qDebug() << "insufficient permission to modify this channel";
+                    qDebug() << "failed to delete channel.";
             }
+            else
+                qDebug() << "insufficient permission to modify this channel";
         }
 
         break;

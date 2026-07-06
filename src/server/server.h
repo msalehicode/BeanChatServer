@@ -25,6 +25,8 @@
 #include <QPainterPath>
 #include <QBuffer>
 
+#include "../models/database.h"
+
 class ClientSession;
 
 class Server : public QObject
@@ -35,7 +37,7 @@ public:
     const QString avatarDirectoryName = "avatars";
 
 
-    explicit Server(QObject* parent = nullptr);
+    explicit Server(Database* db, QObject* parent = nullptr);
 
     bool start(quint16 port,
                quint16 udpPort);
@@ -56,7 +58,7 @@ public:
         const QString& name,
         const QString& password,
         bool saveChats,
-        UserModel *owner);
+        UserModel *owner=nullptr);
 
     int changeUserStatus(
         PacketType type,
@@ -113,6 +115,7 @@ private:
 
     quint64 m_nextUserId = 1;
 
+    Database* m_db=nullptr;
     QTcpServer m_server;
 
     QHash<QTcpSocket*, ClientSession*> m_sessions;

@@ -13,36 +13,19 @@
 #include <QSqlQuery>
 #include <QVariant>
 
-Server::Server(
-    QObject* parent)
+Server::Server(Database *db,
+               QObject* parent)
     :
+    m_db(db),
     QObject(parent)
 {
-
     //read channels from database
-    //code here
-
-    //create channels
-    auto admins = new Channel;
-    admins->id = 1;
-    admins->name = "Admins";
-    admins->saveChats=true;
-    admins->password="admins";
-    m_channels.push_back(admins);
-
-
-    auto lobby = new Channel;
-    lobby->id = 2;
-    lobby->name = "Lobby";
-    m_channels.push_back(lobby);
-
-
-    auto dota2 = new Channel;
-    dota2->id = 3;
-    dota2->name = "Dota2";
-    dota2->saveChats=true;
-    m_channels.push_back(dota2);
-
+    if(!m_db->open())
+    {
+        qFatal("Failed to open database.");
+    }
+    m_channels = m_db->loadChannels();
+    printChannels();
 
 
     //read saved server info
@@ -163,6 +146,15 @@ UserModel* Server::loginUser(
 
     qDebug() << req.username << "logged in";
 
+    //check does this user own a channel?! if yes update that channel's owner pointer
+    for(Channel* channel : m_channels)
+    {
+        if(channel->ownerIdentity == user->identity)
+        {
+            channel->owner = user;
+        }
+    }
+
     return user;
 }
 
@@ -196,6 +188,15 @@ void Server::removeSession(QTcpSocket *socket)
 
 void Server::disconnectUser(UserModel *user, bool connectionLost)
 {
+    //reset channel->owner's pointer if user owns a channel
+    for(Channel* channel : m_channels)
+    {
+        if(channel->owner == user)
+        {
+            channel->owner = nullptr;
+        }
+    }
+
     ClientSession *session = m_sessions.value(user->socket);
 
     if (session)
@@ -210,22 +211,33 @@ Channel* Server::createChannel(
 {
     auto channel = new Channel;
 
-    channel->id = m_channels.size() + 1;
     channel->name = name;
     channel->password = password;
     channel->saveChats = saveChats;
+    channel->displayOrder = m_channels.size();
 
     if(owner)
+    {
         channel->owner=owner;
+        channel->ownerIdentity = owner->identity;
+    }
     else
         channel->owner=nullptr;
 
-    m_channels.push_back(channel);
+
+    if(!m_db->createChannel(channel))
+    {
+        qWarning()<< "failed to createChannel in db.";
+        delete channel;
+        return nullptr;
+    }
 
     qDebug()
         << "Channel created:"
         << channel->id
         << channel->name;
+
+    m_channels.push_back(channel);
 
     return channel;
 }
@@ -257,6 +269,14 @@ bool Server::updateChannel(Channel* channel,
             channel->password = pass;
         channel->saveChats = saveChats;
 
+        //later update received channel's displayOrder too.
+        //code here
+
+        if(!m_db->updateChannel(channel))
+        {
+            qWarning()<< "failed to update channle in db.";
+            return false;
+        }
         return true;
     }
     return false;
@@ -271,13 +291,18 @@ bool Server::deleteChannel(Channel *channel)
     if (index == -1)
         return false;
 
+    if(!m_db->deleteChannel(channel->id))
+    {
+        qWarning() <<"failed to delete channel in db.";
+        return false;
+    }
+
+
     //remove all users in this channel
     for(UserModel* user : channel->users)
     {
         qDebug() << "user removed from channel";
         user->currentChannel = nullptr;
-
-        //in client side when a channel deleted would go and find all users of that channel and remove them from that channel
     }
 
     m_channels.removeAt(index);
