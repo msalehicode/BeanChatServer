@@ -110,7 +110,7 @@ public:
 
     Channel *findChannelById(quint64 id);
     UserModel *findUser(quint64 userId);
-    bool isIdentityInUse(const QString& identity);
+    bool isPublicKeyInUse(const QByteArray &pubkey);
 
 
 
@@ -125,6 +125,7 @@ public:
     QString platformName();
     ServerInfo* info();
 
+    bool updateUsername(UserModel *user, const QString &newUsername);
 private slots:
     void onNewConnection();
 

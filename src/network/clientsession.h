@@ -9,6 +9,7 @@
 #include <protocol/PacketHelpers.h>
 #include <protocol/ProtocolLimits.h>
 #include <protocol/ProtocolVersion.h>
+#include <crypto/Crypto.h>
 using namespace BeanChatCommon;
 
 
@@ -16,6 +17,7 @@ using namespace BeanChatCommon;
 #include "../models/user.h"
 
 #include <QDebug>
+
 
 #include <QVersionNumber>
 
@@ -51,12 +53,17 @@ private:
     void processPacket(
         const Packet& packet);
 
+    void handleLoginProof(const QByteArray &payload);
     void handleLogin(
         const QByteArray& payload);
 
 private:
     QByteArray m_buffer;
     bool m_connectionLost=false;
+
+    //login stuff
+    LoginRequestPacket m_pendingLogin;
+    QByteArray m_pendingChallenge;
 
     QTcpSocket* m_socket;
     Server* m_server;

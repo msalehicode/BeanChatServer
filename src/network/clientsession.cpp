@@ -143,6 +143,82 @@ void ClientSession::onReadyRead()
     }
 }
 
+void ClientSession::handleLoginProof(const QByteArray& payload)
+{
+    qDebug() << "login proof user...";
+    auto proof = PacketHelpers::unpack<LoginPacket>(payload);
+
+    qDebug() << "proof Signature:" << proof.payload.toBase64();
+
+    bool ok = Crypto::verify(m_pendingLogin.publicKey,
+                            m_pendingChallenge,
+                            proof.payload);
+
+    //check is login verified?
+    if(!ok)
+    {
+        LoginResponsePacket resp;
+        resp.accepted = false;
+        resp.message = "failed to login, verification fails.";
+        qDebug() << "failed to login, verification fails.";
+        sendToSender(PacketType::LoginResponse, PacketHelpers::pack(resp));
+        return;
+    }
+
+    //server login (insert or fetch data)
+    m_user = m_server->loginUser(m_pendingLogin,m_socket);
+
+    //clear.
+    m_pendingLogin = {};
+    m_pendingChallenge.clear();
+
+    if(!m_user)
+    {
+        qDebug() << "faild to loginUser. server returnes null user";
+        LoginResponsePacket resp;
+        resp.accepted = false;
+        resp.message = "failed to login, server interal error.";
+        sendToSender(PacketType::LoginResponse, PacketHelpers::pack(resp));
+        return;
+    }
+
+    //check is user banned?
+    if(m_user->banned)
+    {
+        qint64 remaining = m_user->banExpiresAt - QDateTime::currentSecsSinceEpoch();
+
+        LoginResponsePacket resp;
+        resp.accepted = false;
+        resp.message = "You are banned. Come back in " + formatRemainingTime(remaining)+".";
+        sendToSender(PacketType::LoginResponse, PacketHelpers::pack(resp));
+        return;
+    }
+
+    //send login response to sender
+    LoginResponsePacket resp;
+    resp.id = m_user->id; //tell him is id, to know when we say user 10 moved if it's equal to his id knows it's himself.
+    resp.accepted=true; //it's accepted so user send udp login/register and ask for serverLatestState
+    resp.message="logged in succesfully.";
+    sendToSender(PacketType::LoginResponse, PacketHelpers::pack(resp));
+
+
+    m_server->printUsers();
+
+
+    //notify all users in server someone connected.
+    UserConnectedPacket uc;
+    uc.id = m_user->id;
+    uc.username = m_user->username;
+    uc.identity = m_user->identity;
+    uc.avatarHash = m_user->avatarHash;
+    uc.appVersion = m_user->appVersion;
+    uc.buildType = m_user->buildType;
+    uc.osName = m_user->osName;
+    uc.osVersion = m_user->osVersion;
+    qDebug() << "user connected and reported his system info: " <<  uc.appVersion << "-" << uc.buildType << "-" << uc.osName << "-" << uc.osVersion;
+    sendToEveryone(PacketType::UserConnected, PacketHelpers::pack(uc));
+}
+
 void ClientSession::handleLogin(const QByteArray& payload)
 {
     auto req = PacketHelpers::unpack<LoginRequestPacket>(payload);
@@ -164,9 +240,9 @@ void ClientSession::handleLogin(const QByteArray& payload)
         return;
     }
 
-
     //reject empty username or identity
-    if(req.username.isEmpty() || req.identity.isEmpty())
+    req.username = req.username.trimmed(); //remove many whitespaces
+    if(req.username.isEmpty() || req.publicKey.isEmpty())
     {
         LoginResponsePacket resp;
         resp.accepted=false;
@@ -175,8 +251,30 @@ void ClientSession::handleLogin(const QByteArray& payload)
         return;
     }
 
+    //check for username length
+    if(req.username.size() > ProtocolLimits::MaxUsernameLength)
+    {
+        LoginResponsePacket resp;
+        resp.accepted=false;
+        resp.message="Username length is more than max, please make it small.";
+        sendToSender(PacketType::LoginResponse, PacketHelpers::pack(resp));
+        return;
+    }
+
+
+    //check public key is valid?
+    if(!Crypto::isValidPublicKey(req.publicKey))
+    {
+        LoginResponsePacket resp;
+        resp.accepted = false;
+        resp.message = "Invalid identity.";
+        sendToSender(PacketType::LoginResponse,
+                     PacketHelpers::pack(resp));
+        return;
+    }
+
     //reject duplicated identity
-    if(m_server->isIdentityInUse(req.identity))
+    if(m_server->isPublicKeyInUse(req.publicKey))
     {
         LoginResponsePacket resp;
         resp.accepted=false;
@@ -186,54 +284,20 @@ void ClientSession::handleLogin(const QByteArray& payload)
     }
 
 
+    // Save pending login information
+    m_pendingLogin = req;
+    qDebug() << "requset Public key :" << m_pendingLogin.publicKey.toBase64();
 
 
-    m_user = m_server->loginUser(req,m_socket);
-    if(!m_user)
-    {
-        qDebug() << "faild to loginUser. server returnes null user.";
-        LoginResponsePacket resp;
-        resp.accepted = false;
-        resp.message = "failed to login, server interal error.";
-        sendToSender(PacketType::LoginResponse, PacketHelpers::pack(resp));
-        return;
-    }
-
-    //check is user banned?
-    if(m_user->banned)
-    {
-        qint64 remaining = m_user->banExpiresAt - QDateTime::currentSecsSinceEpoch();
-
-        LoginResponsePacket resp;
-        resp.accepted = false;
-        resp.message = "You are banned. Come back in " + formatRemainingTime(remaining)+".";
-        sendToSender(PacketType::LoginResponse, PacketHelpers::pack(resp));
-        return;
-    }
-
-    //send login response to sender
-    LoginResponsePacket lrp;
-    lrp.id = m_user->id; //tell him is id, to know when we say user 10 moved if it's equal to his id knows it's himself.
-    lrp.accepted=true; //it's accepted so user send udp login/register and ask for serverLatestState
-    lrp.message="logged in succesfully.";
-    sendToSender(PacketType::LoginResponse, PacketHelpers::pack(lrp));
+    //generate a challenge
+    m_pendingChallenge = Crypto::randomBytes(32);
+    qDebug() << "Challenge created:" << m_pendingChallenge.toBase64();
 
 
-    m_server->printUsers();
-
-
-    //notify all users in server someone connected.
-    UserConnectedPacket uc;
-    uc.id = m_user->id;
-    uc.username = m_user->username;
-    uc.identity = m_user->identity;
-    uc.avatarHash = m_user->avatarHash;
-    uc.appVersion = m_user->appVersion;
-    uc.buildType = m_user->buildType;
-    uc.osName = m_user->osName;
-    uc.osVersion = m_user->osVersion;
-    qDebug() << "user connected and reported his system info: " <<  uc.appVersion << "-" << uc.buildType << "-" << uc.osName << "-" << uc.osVersion;
-    sendToEveryone(PacketType::UserConnected, PacketHelpers::pack(uc));
+    //send challange to client
+    LoginPacket challenge;
+    challenge.payload = m_pendingChallenge;
+    sendToSender(PacketType::LoginChallenge, PacketHelpers::pack(challenge));
 }
 
 void ClientSession::processPacket(
@@ -245,7 +309,14 @@ void ClientSession::processPacket(
     {
     case PacketType::LoginRequest:
     {
+        //check for version, username , identity/public-key are valid then make a challange send to client wait for response
         handleLogin(packet.payload);
+        break;
+    }
+    case PacketType::LoginProof:
+    {
+        //check login proof
+        handleLoginProof(packet.payload);
         break;
     }
     case PacketType::RequestServerState:
@@ -598,12 +669,41 @@ void ClientSession::processPacket(
 
         switch(p.updateType)
         {
+            case UpdateUserInfoType::Username:
+            {
+                qDebug() << "SERVER: update username received";
+
+                //check username length
+                if(p.payloadValue.length() > BeanChatCommon::ProtocolLimits::MaxUsernameLength)
+                {
+                    qDebug() << "oh no we dont accept username with this long length.";
+                    return;
+                }
+
+
+                if(m_server->updateUsername(m_user,p.payloadValue))
+                {
+                    //notify everyone a user username updated.
+                    UserInfoChangedPacket ui;
+                    ui.userId = m_user->id;
+                    ui.payloadValue = p.payloadValue;
+                    ui.updateType = UpdateUserInfoType::Username;
+                    sendToEveryone(PacketType::UserInfoChanged, PacketHelpers::pack(ui));
+                    qDebug() << "notify everyone, user's username updated.";
+                }
+
+                break;
+            }
             case UpdateUserInfoType::Avatar:
             {
                 qDebug() << "SERVER: update avatar received size=" << p.paylaodData.size();
 
                 //check data size is valid for avatar?
-                //code here...
+                if(p.paylaodData.size() > BeanChatCommon::ProtocolLimits::MaxPacketSize)
+                {
+                    qDebug() << "oh no we dont accept image with this large size.";
+                    return;
+                }
 
                 //try to make picture rounded, its better do.
                 if (!m_server->makeAvatarRounded(p.paylaodData))

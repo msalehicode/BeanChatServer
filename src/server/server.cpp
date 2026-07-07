@@ -109,7 +109,7 @@ UserModel* Server::loginUser(
     //make user to pass to m_db->login for accept or reject
     auto user = new UserModel;
     user->username = req.username;
-    user->identity = req.identity;
+    user->identity = QString::fromUtf8(req.publicKey.toBase64());
     user->socket = socket;
     user->ip =socket->peerAddress().toString();
     user->port =socket->peerPort();
@@ -155,11 +155,11 @@ UserModel *Server::findUser(quint64 userId)
     return nullptr;
 }
 
-bool Server::isIdentityInUse(const QString &identity)
+bool Server::isPublicKeyInUse(const QByteArray &pubkey)
 {
     for(UserModel* usr : m_users)
     {
-        if(usr->identity == identity)
+        if(usr->identity == QString::fromUtf8(pubkey.toBase64()))
             return true;
     }
     return false;
@@ -405,6 +405,28 @@ bool Server::deleteAvatar(const QString &serverDir, const QString &hash)
     return QFile::remove(serverDir + "/" + hash + ".png");
 }
 
+
+bool Server::updateUsername(UserModel* user, const QString& newUsername)
+{
+    if(user)
+    {
+        //check for bad words fitler list, replace those parts OR just deny request
+        //code here
+
+
+
+        //update user's avatarHash in database
+        if(!m_db->updateUserField(user->identity, UserField::Username, newUsername))
+        {
+            qWarning() <<"failed to update username in database!";
+            return false;
+        }
+
+        user->username = newUsername;
+        return true;
+    }
+    return false;
+}
 QString Server::updateUserAvatar(UserModel* user, const QByteArray &data)
 {
     QString hash;
@@ -430,10 +452,10 @@ QString Server::updateUserAvatar(UserModel* user, const QByteArray &data)
                 user->avatarHash = hash;
 
                 //update user's avatarHash in database
-                m_db->updateUserField(
-                    user->identity,
-                    UserField::AvatarHash,
-                    hash);
+                if(!m_db->updateUserField(user->identity, UserField::AvatarHash, hash))
+                {
+                    qWarning() <<"failed to update user new avatarHash in database! but we continue anyway";
+                }
 
 
                 return hash;
