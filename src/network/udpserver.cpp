@@ -418,19 +418,11 @@ void UdpServer::processVoice(
 
 void UdpServer::processVideo(const QNetworkDatagram &datagram, QDataStream &stream)
 {
-    VideoPacket packet;
+    VideoFragment frag;
 
-    stream >> packet;
+    stream >> frag;
 
-    qDebug()
-        << "Video:"
-            << packet.senderId << " "
-            << packet.sequence << " "
-            << packet.videoData.size();
-
-    auto sender =
-        findUser(
-            packet.senderId);
+    auto sender = findUser(frag.senderId);
 
     if(!sender)
     {
@@ -459,8 +451,8 @@ void UdpServer::processVideo(const QNetworkDatagram &datagram, QDataStream &stre
         return;
 
 
-    calculatePacketLoss(packet.sequence, sender->videoPacketLossStats);
-
+    if (frag.fragmentIndex == 0)
+        calculatePacketLoss(frag.frameId, sender->videoPacketLossStats);
 
 
     QByteArray outData;
@@ -470,7 +462,7 @@ void UdpServer::processVideo(const QNetworkDatagram &datagram, QDataStream &stre
         QIODevice::WriteOnly);
 
     out << PacketType::UdpVideoData;
-    out << packet;
+    out << frag;
 
     for(auto user : channel->users)
     {

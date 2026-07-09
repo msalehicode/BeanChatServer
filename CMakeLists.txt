@@ -36,8 +36,8 @@ target_compile_definitions(BeanChatServer PRIVATE
   DATABASE_FILE_NAME="server.db"
   AVATARS_DIRECTORY_NAME="avatars"
 
-  SERVER_VERSION="0.17.13"
-  CLIENT_MINIMUM_VERSION="0.20.8"
+  SERVER_VERSION="0.17.14"
+  CLIENT_MINIMUM_VERSION="0.21.19"
 
   #default port
   DEFAULT_PORT=9987
