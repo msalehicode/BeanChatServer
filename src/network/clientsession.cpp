@@ -1,5 +1,5 @@
 #include "clientsession.h"
-
+#include <protocol/ProtocolVersion.h>
 
 ClientSession::ClientSession(
     QTcpSocket* socket,
@@ -228,13 +228,14 @@ void ClientSession::handleLogin(const QByteArray& payload)
 
     //check user veriosn is compatible?
     QVersionNumber clientVersion = QVersionNumber::fromString(req.appVersion);
-    if(clientVersion < m_server->minimumVersion)
+    if(clientVersion < m_server->minimumVersion
+        || req.appProtocolVersion < BeanChatCommon::Protocol::Version )
     {
         qDebug() << "Client version too old.";
 
         LoginResponsePacket resp;
         resp.accepted = false;
-        resp.message = "Please update BeanChat, the server accepts minimum version "CLIENT_MINIMUM_VERSION;
+        resp.message = "Please update BeanChat, the server accepts minimum version: " CLIENT_MINIMUM_VERSION " min-protocol: "+QString::number(BeanChatCommon::Protocol::Version);
         sendToSender(PacketType::LoginResponse, PacketHelpers::pack(resp));
 
         return;
