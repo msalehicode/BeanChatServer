@@ -36,8 +36,8 @@ target_compile_definitions(BeanChatServer PRIVATE
   DATABASE_FILE_NAME="server.db"
   AVATARS_DIRECTORY_NAME="avatars"
 
-  SERVER_VERSION="0.17.15"
-  CLIENT_MINIMUM_VERSION="0.21.21" #basic (which has updater to update database, files)
+  SERVER_VERSION="0.17.16"
+  CLIENT_MINIMUM_VERSION="0.25.23" #basic (which has updater to update database, files, and fixed)
 
   #default port
   DEFAULT_PORT=9987
@@ -45,7 +45,7 @@ target_compile_definitions(BeanChatServer PRIVATE
   #udp ping and packet loss configs
   UDP_SEND_PINGS_INTERVAL=2000 #every 2 seconds
   UDP_CALCULATE_PACKETLOSS_INTERAL=5000 #every 5s calcualte packetloss video and voice
-  UDP_MAX_TIMEOUT_TO_CONNECTION_LOST=10000 #when user dont send 10s pingResponse would assume that connection is lost
+  UDP_MAX_TIMEOUT_TO_CONNECTION_LOST=15000 #when user dont send 15s pingResponse would assume that connection is lost
 )
 
 target_link_libraries(BeanChatServer
