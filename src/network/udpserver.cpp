@@ -66,7 +66,7 @@ void UdpServer::sendPings()
 
 
         //check Has that connection repsonsed for a while or not
-        if (user->lastUdpPong.elapsed() > UDP_MAX_TIMEOUT_TO_CONNECTION_LOST) // 10 seconds
+        if (user->lastUdpActivity.elapsed() > UDP_MAX_TIMEOUT_TO_CONNECTION_LOST) // 10 seconds
         {
             qDebug() << "user UDP timed out.";
 
@@ -165,7 +165,8 @@ void UdpServer::processPong(
     user->ping =
         int(now - sentTime);
 
-    user->lastUdpPong.restart();
+    //refresh user activity
+    user->lastUdpActivity.restart();
 
     user->pongsReceived++;
 
@@ -332,9 +333,8 @@ void UdpServer::processRegister(
         << user->username
         << "UDP registered" << "user addres= " << user->udpAddress << " port:" << user->udpPort;
 
-
-
-    user->lastUdpPong.start();
+    //start user activity
+    user->lastUdpActivity.start();
 
     //send back reponse login
     QByteArray outData;
@@ -394,6 +394,8 @@ void UdpServer::processVoice(
     if(!channel)
         return;
 
+    //refresh user activity
+    sender->lastUdpActivity.restart();
 
     //calculate packetloss
     calculatePacketLoss(packet.sequence, sender->voicePacketLossStats);
@@ -459,6 +461,9 @@ void UdpServer::processVideo(const QNetworkDatagram &datagram, QDataStream &stre
 
     if(!channel)
         return;
+
+    //refresh user activity
+    sender->lastUdpActivity.restart();
 
 
     if (frag.fragmentIndex == 0)
