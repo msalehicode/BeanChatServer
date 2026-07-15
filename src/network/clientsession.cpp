@@ -620,7 +620,7 @@ void ClientSession::processPacket(
         //find and fill users' avatars
         UserAvatar temp;
 
-        //if userId is RESERVED_TO_ASK_SERVERS_AVATAR, means user asked server's avatar
+        //if userId is BeanChatCommon::ReservedIds::ServerAvatar, means user asked server's avatar
         if(p.notFoundIds.contains(BeanChatCommon::ReservedIds::ServerAvatar))
         {
             ServerInfo* serverInfo = m_server->info();
@@ -629,7 +629,10 @@ void ClientSession::processPacket(
                 temp.userId=BeanChatCommon::ReservedIds::ServerAvatar;
                 temp.avatarHash=serverInfo->avatarHash;
                 temp.imageData = m_server->imageFileToBytes(m_server->avatarDirectoryName+"/"+serverInfo->avatarHash+".png");
-                temp.oldHash= serverInfo->oldAvatarHash;//to tell users delete this old avatar
+                if(!m_server->isAvatarHashUsedByAnotherUser(serverInfo->oldAvatarHash))
+                {
+                    temp.oldHash= serverInfo->oldAvatarHash; //to tell users delete this old avatar.
+                }
                 qDebug() << "user asked servers avatar. filled fine :)";
                 ra.avatars.append(temp);
             }
@@ -646,7 +649,7 @@ void ClientSession::processPacket(
                 //fill data
                 temp.userId = user->id;
                 temp.avatarHash = user->avatarHash;
-                // temp.oldHash = ""; // ------------------- LATER need more work because server sent new hash so if user coulnt find that hash.png in cached so would ask for new avatar so we have a file leak that old hash.png wont delete anytime.
+                temp.oldHash = user->oldAvatarHash;
                 temp.imageData = m_server->imageFileToBytes(m_server->avatarDirectoryName+"/"+user->avatarHash+".png");
                 ra.avatars.append(temp);
             }
@@ -712,8 +715,9 @@ void ClientSession::processPacket(
                 else
                     qDebug() << "avatar image rounded.";
 
-                QString oldHash = m_user->avatarHash;//to store old hash value to tell users delete this old one from cached files
-                QString hashResult = m_server->updateUserAvatar(m_user,p.paylaodData);
+                QString oldHash = m_user->avatarHash;//to store old hash value WHEN it isn't  used by more than one user, to tell users delete this old one from cached files
+                bool removeOldAvatar=false;
+                QString hashResult = m_server->updateUserAvatar(m_user,p.paylaodData,removeOldAvatar);
                 //check is generated hash is valid?
                 if(!hashResult.isEmpty())
                 {
@@ -723,7 +727,10 @@ void ClientSession::processPacket(
                     ui.payloadValue = hashResult;
                     ui.updateType = UpdateUserInfoType::Avatar;
                     ui.payloadData = p.paylaodData;
-                    ui.payloadSecondValue = oldHash; //to tell users remove old file due to privacy and less cache size on local files
+
+                    if(removeOldAvatar)
+                        ui.payloadSecondValue = oldHash; //to tell users remove old file due to privacy and less cache size on local files
+
                     sendToEveryone(PacketType::UserInfoChanged, PacketHelpers::pack(ui));
                     qDebug() << "notify everyone, user's avatar updated.";
                 }

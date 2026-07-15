@@ -13,6 +13,7 @@ enum class UserField
 {
     Username,
     AvatarHash,
+    OldAvatarHash,
 
     IsAdmin,
 
@@ -54,6 +55,8 @@ public:
         bool banned,
         qint64 banExpiresAt,
         const QString& banReason);
+    bool isAvatarHashUsedByAnotherUser(const QString& avatarHash);
+
 
 private:
     QSqlDatabase m_db;

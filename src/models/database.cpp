@@ -36,6 +36,7 @@ bool Database::createTables()
                 identity TEXT UNIQUE NOT NULL,
                 username TEXT NOT NULL,
                 avatarHash TEXT,
+                oldAvatarHash TEXT,
 
                 banned INTEGER NOT NULL DEFAULT 0,
                 banExpiresAt INTEGER NOT NULL DEFAULT 0,
@@ -287,6 +288,9 @@ bool Database::loginUser(UserModel *user)
     user->avatarHash =
         query.value("avatarHash").toString();
 
+    user->oldAvatarHash =
+        query.value("oldAvatarHash").toString();
+
     user->isAdmin =
         query.value("isAdmin").toBool();
 
@@ -391,6 +395,10 @@ bool Database::updateUserField(
         fieldName = "avatarHash";
         break;
 
+    case UserField::OldAvatarHash:
+        fieldName = "oldAvatarHash";
+        break;
+
     case UserField::IsAdmin:
         fieldName = "isAdmin";
         break;
@@ -487,4 +495,27 @@ bool Database::setUserBan(
     }
 
     return true;
+}
+
+bool Database::isAvatarHashUsedByAnotherUser(const QString &avatarHash)
+{
+    QSqlQuery query;
+
+    query.prepare(
+        "SELECT COUNT(*) "
+        "FROM users "
+        "WHERE avatarHash = ?");
+
+    query.addBindValue(avatarHash);
+
+    if (!query.exec())
+    {
+        qWarning() << "failed to read database for isAvatarHashUsedByAnotherUser error=" << query.lastError();
+        return false;
+    }
+
+    if (!query.next())
+        return false;
+
+    return query.value(0).toInt() > 1;
 }

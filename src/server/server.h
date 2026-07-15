@@ -119,7 +119,8 @@ public:
     QByteArray imageFileToBytes(const QString &path);
     bool saveAvatarImage(const QString &serverDir, const QString &hash, const QByteArray &avatarData);
     bool deleteAvatar(const QString &serverDir, const QString &hash);
-    QString updateUserAvatar(UserModel *user, const QByteArray &data); //if succeed reutrns a hash else empty string
+    QString updateUserAvatar(UserModel *user, const QByteArray &data, bool &removeOldAvatar); //if succeed reutrns a hash else empty string
+    bool isAvatarHashUsedByAnotherUser(const QString& avatarHash);
 
     bool makeAvatarRounded(QByteArray &avatarData, int avatarSize=128);
     QString platformName();

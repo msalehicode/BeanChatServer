@@ -29,6 +29,7 @@ public:
     QString username;
     QString identity;
     QString avatarHash; //store generated hash for each avatar
+    QString oldAvatarHash=""; //to prevent leak user's avatar when someone is offline and one changed his avatar.
     quint64 totalConnected=0;
     QDateTime firstLogin;
 

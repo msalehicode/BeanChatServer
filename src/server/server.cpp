@@ -427,7 +427,7 @@ bool Server::updateUsername(UserModel* user, const QString& newUsername)
     }
     return false;
 }
-QString Server::updateUserAvatar(UserModel* user, const QByteArray &data)
+QString Server::updateUserAvatar(UserModel* user, const QByteArray &data, bool& removeOldAvatar)
 {
     QString hash;
     if(user)
@@ -440,9 +440,35 @@ QString Server::updateUserAvatar(UserModel* user, const QByteArray &data)
             qDebug() <<"avatar saved into server,local files";
 
 
-            //delete old avatar file (hash.png)
-            if(!deleteAvatar(avatarDirectoryName, user->avatarHash))
-                qWarning() << "warning: couldn't to delete old avatar in server files.";
+            //check if anyone has this hash avatar? (TO PREVENT REMOVE OTHER USERS AVATARS WITH SAME PICTURE)
+            if(!isAvatarHashUsedByAnotherUser(user->avatarHash))
+             {
+                    //delete old avatar file (hash.png)
+                    if(!deleteAvatar(avatarDirectoryName, user->avatarHash))
+                        qWarning() << "warning: couldn't to delete old avatar in server files.";
+
+
+                    //update databse old hash avatar for user (to know later when someone connected tell him if avatar wasn't use by another user remove it to keep privacy)
+                    user->oldAvatarHash = user->avatarHash;
+                    //update user's OldAvatarHash in database
+                    if(!m_db->updateUserField(user->identity, UserField::OldAvatarHash, user->avatarHash))
+                    {
+                        qWarning() <<"failed to update user oldAvatarHash in database!";
+                    }
+
+                    //report to caller of this function  need to remove old avatar
+                    removeOldAvatar=true;
+             }
+            else //more than one user is using that avatar hash so don't report oldHash (if report, all users would remove that avatar locally) OR when error occured for database it return false
+            {
+                 //reset old hash for this user
+                 user->oldAvatarHash = "";
+                 //update user's OldAvatarHash in database
+                 if(!m_db->updateUserField(user->identity, UserField::OldAvatarHash, user->oldAvatarHash))
+                 {
+                     qWarning() <<"failed to reset user oldAvatarHash in database!";
+                 }
+             }
 
 
             //check is hash valid
@@ -471,6 +497,12 @@ QString Server::updateUserAvatar(UserModel* user, const QByteArray &data)
 
     return hash;
 }
+
+bool Server::isAvatarHashUsedByAnotherUser(const QString &avatarHash)
+{
+    return m_db->isAvatarHashUsedByAnotherUser(avatarHash);
+}
+
 
 int Server::changeUserStatus(PacketType type,
                               UserModel* user)
