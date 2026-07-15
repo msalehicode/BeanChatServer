@@ -162,8 +162,24 @@ void UdpServer::processPong(
     const qint64 now =
         QDateTime::currentMSecsSinceEpoch();
 
-    user->ping =
-        int(now - sentTime);
+    //smooth ping
+    const int measuredPing = int(now - sentTime);
+    constexpr double PingSmoothing = 0.2;
+    /*Choosing PingSmoothing:
+        0.1 → very smooth, slower to react.
+        0.2 → a good default.
+        0.3 → more responsive, still reasonably stable.
+        0.5 → reacts quickly but allows more fluctuation.
+    */
+
+    if (user->ping == 0)
+    {
+        user->ping = measuredPing;
+    }
+    else
+    {
+        user->ping = int(user->ping * (1.0 - PingSmoothing) + measuredPing * PingSmoothing);
+    }
 
     //refresh user activity
     user->lastUdpActivity.restart();
