@@ -62,7 +62,8 @@ public:
 
     UserModel* loginUser(
         const LoginRequestPacket &req,
-        QTcpSocket* socket);
+        QTcpSocket* socket,
+        QString &errorMessage);
 
     UserModel* findUser(
         QTcpSocket* socket);
@@ -94,6 +95,7 @@ public:
         const QString& password);
 
     QList<UserModel*> users() const;
+    QList<UserModel *> allUsers() const;
 
     QByteArray buildServerState();
 
@@ -101,7 +103,8 @@ public:
     //prints
     void printChannels();
     void printChannelWithUsersIn();
-    void printUsers();
+    void printUsers(); //online/connected
+    void printAllUsers();
 
 
     Channel *updateChannel(quint64 channelId, const QString &name, const QString &pass, bool saveChats);
@@ -109,7 +112,7 @@ public:
     bool deleteChannel(Channel *channel);
 
     Channel *findChannelById(quint64 id);
-    UserModel *findUser(quint64 userId);
+    UserModel *findUser(quint64 userId); //among connected Users not all users!!!!
     bool isPublicKeyInUse(const QByteArray &pubkey);
 
 
@@ -127,6 +130,10 @@ public:
     ServerInfo* info();
 
     bool updateUsername(UserModel *user, const QString &newUsername);
+    UserModel *findUserByIdentity(const QString &identity);
+
+
+    bool updateUserActivityStatus(UserModel *user, const QString &newStatus);
 private slots:
     void onNewConnection();
 
@@ -142,6 +149,7 @@ private:
     QHash<QTcpSocket*, ClientSession*> m_sessions;
 
     QList<UserModel*> m_users;
+    QList<UserModel*> m_allUsers;  // all registered users
 
     QList<Channel*> m_channels;
 

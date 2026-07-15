@@ -45,6 +45,7 @@ public:
 
 
     //user
+    QList<UserModel*> loadAllUsers();
     bool loginUser(UserModel* user);
     bool updateUserField(
         const QString& identity,

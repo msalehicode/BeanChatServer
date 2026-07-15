@@ -7,6 +7,9 @@
 #include <QElapsedTimer>
 #include <QDateTime>
 
+
+#include <protocol/commonTypes.h>
+
 class Channel;
 
 
@@ -19,6 +22,7 @@ struct PacketLossStats
 
     quint32 highestSequence = 0;
 };
+
 
 class UserModel
 {
@@ -36,6 +40,9 @@ public:
     //
     Channel* currentChannel = nullptr;
     qint64 connectedSince = 0;
+
+    bool connected=false; //when user is disconnected set this
+    BeanChatCommon::Presence::Status status= BeanChatCommon::Presence::Status::Unknown;
 
     //permissions (grant/denied)
     bool canTalk=true;

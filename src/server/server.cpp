@@ -20,6 +20,12 @@ Server::Server(Database *db,
     m_info.website="https://example.com";
     m_info.avatarHash="782f57381bb2e4678376cdd49dfe7afc6e3f6041689803af8fdd5bf7bdc9542d";
     m_info.startTime=QDateTime::currentDateTimeUtc();
+    m_info.showOfflineUsers=true;
+    m_info.maxUsers=32;
+
+
+    //load all users
+    m_allUsers = m_db->loadAllUsers();
 }
 
 QString Server::platformName()
@@ -80,9 +86,10 @@ bool Server::start(
 
 
 void Server::onNewConnection()
-{
+{    
     while (m_server.hasPendingConnections())
     {
+
         QTcpSocket *socket = m_server.nextPendingConnection();
 
         ClientSession *session = new ClientSession(socket, this);
@@ -93,23 +100,67 @@ void Server::onNewConnection()
     }
 }
 
+QList<UserModel *> Server::allUsers() const
+{
+    return m_allUsers;
+}
+
 ServerInfo* Server::info()
 {
     return &m_info;
 }
 
+UserModel* Server::findUserByIdentity(const QString& identity)
+{
+    for (UserModel* user : m_allUsers)
+    {
+        if (user->identity == identity)
+            return user;
+    }
+
+    return nullptr;
+}
+
 UserModel* Server::loginUser(
     const LoginRequestPacket& req,
-    QTcpSocket* socket)
+    QTcpSocket* socket,
+    QString& errorMessage)
 {
+    QString identityBase64 = QString::fromUtf8(req.publicKey.toBase64());
 
-    //check is identity is valid?
-    //code here.
+    UserModel* user = findUserByIdentity(identityBase64);
+
+
+    //check if server is full (some slots are reserved for admins)
+    if (m_users.count() >= m_info.maxUsers)
+    {
+        errorMessage = "server is full";
+        return nullptr;
+    }
+
+    if (!user || !user->isAdmin) //user is new OR isn't admin
+    {
+        if (m_users.count() >= m_info.maxUsers - m_info.reservedSlots)
+        {
+            errorMessage = "server is full";
+            return nullptr;
+        }
+    }
+
+
+
+    bool isNewUser=false; //a flag to know delete if login fails
+    bool loggedIn=false;
+
+    if(!user)
+    {
+        user = new UserModel;
+        user->identity = identityBase64;
+        user->username = req.username;
+        isNewUser=true;
+    }
 
     //make user to pass to m_db->login for accept or reject
-    auto user = new UserModel;
-    user->username = req.username;
-    user->identity = QString::fromUtf8(req.publicKey.toBase64());
     user->socket = socket;
     user->ip =socket->peerAddress().toString();
     user->port =socket->peerPort();
@@ -122,27 +173,69 @@ UserModel* Server::loginUser(
     user->connectedSince = QDateTime::currentSecsSinceEpoch();
     user->currentChannel=nullptr;
 
-    //check if user exists set data to user-> else insert and set to user-> if had sql error return false
-    if(m_db->loginUser(user))
-    {
-        m_users.push_back(user);
-        qDebug() << req.username << "logged in";
+    //check if received status is valid or not
+    qDebug() << "login user, received status=" << static_cast<int>(req.status);
+    if(BeanChatCommon::isValidPresenceStatus(req.status))
+        user->status=req.status;
+    else
+        user->status=BeanChatCommon::Presence::Status::Online;
 
-        //check does this user own a channel?! if yes update that channel's owner pointer
-        for(Channel* channel : m_channels)
+
+    //if user is now register to database, otherwise user exists in m_allUsers
+    if(isNewUser)
+    {
+        //check if user exists set data to user-> else insert and set to user-> if had sql error return false
+        if(m_db->loginUser(user)) //NOTE: user would modify by this function
+            loggedIn=true;
+        else
+            qWarning() << "failed to register new user internal error.";
+    }
+    else if (user->connected)
+    {
+        errorMessage="login failed, User already connected.";
+    }
+    else //user login is fine
+    {
+        //check if username diff, update username
+        if(user->username != req.username)
         {
-            if(channel->ownerIdentity == user->identity)
+            if(!updateUsername(user,req.username))
             {
-                channel->owner = user;
+                qWarning() << "Failed to update username.";
+                user->username = req.username; //failed to update username on database so simple just for now update it but its temporary
             }
         }
-
-        return user;
+        loggedIn=true;
     }
 
-    delete user;
-    qDebug() << "failed to login user, database returned false.";
-    return nullptr;
+
+
+    if(!loggedIn)
+    {
+        if(isNewUser)
+            delete user;
+
+        errorMessage= "failed to login user";
+        return nullptr;
+    }
+
+    qDebug() << req.username << "logged in";
+
+    //check does this user own a channel?! if yes update that channel's owner pointer
+    for(Channel* channel : m_channels)
+    {
+        if(channel->ownerIdentity == user->identity)
+        {
+            channel->owner = user;
+        }
+    }
+
+    if(isNewUser)
+        m_allUsers.push_back(user);
+
+    user->connected=true;
+    m_users.push_back(user);
+    return user;
 }
 
 UserModel *Server::findUser(quint64 userId)
@@ -174,8 +267,6 @@ void Server::removeUser(UserModel *user)
         user->currentChannel->users.removeAll(user);
 
     m_users.removeAll(user);
-
-    delete user;
 }
 
 void Server::removeSession(QTcpSocket *socket)
@@ -185,6 +276,9 @@ void Server::removeSession(QTcpSocket *socket)
 
 void Server::disconnectUser(UserModel *user, bool connectionLost)
 {
+    if(!user)
+        return;
+
     //reset channel->owner's pointer if user owns a channel
     for(Channel* channel : m_channels)
     {
@@ -427,6 +521,25 @@ bool Server::updateUsername(UserModel* user, const QString& newUsername)
     }
     return false;
 }
+
+bool Server::updateUserActivityStatus(UserModel* user, const QString& newStatus)
+{
+    if(user)
+    {
+        bool ok=false;
+        BeanChatCommon::Presence::Status status = static_cast<BeanChatCommon::Presence::Status>(newStatus.toInt(&ok));
+        if(ok)
+        {
+            if(BeanChatCommon::isValidPresenceStatus(status))
+            {
+                user->status = status;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 QString Server::updateUserAvatar(UserModel* user, const QByteArray &data, bool& removeOldAvatar)
 {
     QString hash;
@@ -645,10 +758,26 @@ QByteArray Server::buildServerState()
         state.channels.push_back(info);
     }
 
-
     //users
-    for(auto user : m_users)
+    const int maxShowOffline = (m_info.maxUsers>32 ? 50 : m_info.maxUsers);
+    int offlineCount = 0;
+
+    for(auto user : m_allUsers)
     {
+        // User is not connected.
+        if (!user->connected)
+        {
+            // Server doesn't show offline users.
+            if (!m_info.showOfflineUsers)
+                continue;
+
+            // Limit number of offline users sent.
+            if (offlineCount >= maxShowOffline)
+                continue;
+
+            ++offlineCount;
+        }
+
         UserInfo info;
 
         info.id =
@@ -659,6 +788,8 @@ QByteArray Server::buildServerState()
 
         info.identity =
             user->identity;
+
+        info.status = ( user->connected ? user->status : BeanChatCommon::Presence::Status::Offline);
 
         info.avatarHash = user->avatarHash;
 
@@ -690,6 +821,7 @@ QByteArray Server::buildServerState()
             info);
     }
 
+
     return PacketHelpers::pack(state);
 }
 
@@ -717,6 +849,15 @@ void Server::printUsers()
 {
     qDebug() << "users:";
     for(UserModel* user: m_users)
+    {
+        qDebug() << user->id << " " << user->username << " " << user->identity << " " << user->ip;
+    }
+}
+
+void Server::printAllUsers()
+{
+    qDebug() << "all users:";
+    for(UserModel* user: m_allUsers)
     {
         qDebug() << user->id << " " << user->username << " " << user->identity << " " << user->ip;
     }

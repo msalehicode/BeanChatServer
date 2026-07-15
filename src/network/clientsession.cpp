@@ -122,7 +122,7 @@ void ClientSession::onReadyRead()
         if (size > BeanChatCommon::ProtocolLimits::MaxPacketSize)
         {
             qWarning() << "Packet too large from " << m_socket->peerAddress();
-            forceDisconnect(false);
+            m_server->disconnectUser(m_user,false);
             return;
         }
 
@@ -166,7 +166,8 @@ void ClientSession::handleLoginProof(const QByteArray& payload)
     }
 
     //server login (insert or fetch data)
-    m_user = m_server->loginUser(m_pendingLogin,m_socket);
+    QString errorMessage;
+    m_user = m_server->loginUser(m_pendingLogin,m_socket,errorMessage);
 
     //clear.
     m_pendingLogin = {};
@@ -177,7 +178,7 @@ void ClientSession::handleLoginProof(const QByteArray& payload)
         qDebug() << "faild to loginUser. server returnes null user";
         LoginResponsePacket resp;
         resp.accepted = false;
-        resp.message = "failed to login, server interal error.";
+        resp.message = errorMessage;
         sendToSender(PacketType::LoginResponse, PacketHelpers::pack(resp));
         return;
     }
@@ -210,6 +211,7 @@ void ClientSession::handleLoginProof(const QByteArray& payload)
     uc.id = m_user->id;
     uc.username = m_user->username;
     uc.identity = m_user->identity;
+    uc.status=m_user->status;
     uc.avatarHash = m_user->avatarHash;
     uc.appVersion = m_user->appVersion;
     uc.buildType = m_user->buildType;
@@ -231,7 +233,7 @@ void ClientSession::handleLogin(const QByteArray& payload)
     if(clientVersion < m_server->minimumVersion
         || req.appProtocolVersion < BeanChatCommon::Protocol::Version )
     {
-        qDebug() << "Client version too old.";
+        qDebug() << "Client version too old." << req.appVersion<< " protocol=" << req.appProtocolVersion;
 
         LoginResponsePacket resp;
         resp.accepted = false;
@@ -736,6 +738,21 @@ void ClientSession::processPacket(
                 }
                 break;
             }
+            case UpdateUserInfoType::ActivityStatus:
+            {
+                qDebug() << "SERVER: update activity status received";
+
+                if(m_server->updateUserActivityStatus(m_user,p.payloadValue))
+                {
+                    //notify everyone a user username updated.
+                    UserInfoChangedPacket ui;
+                    ui.userId = m_user->id;
+                    ui.payloadValue = p.payloadValue;
+                    ui.updateType = UpdateUserInfoType::ActivityStatus;
+                    sendToEveryone(PacketType::UserInfoChanged, PacketHelpers::pack(ui));
+                    qDebug() << "notify everyone, user's activity status updated.";
+                }
+            }
             default:
                 qDebug() << "a UpdateUserInfo received but not supported for now, type=" << static_cast<int>(p.updateType);
                 break;
@@ -752,9 +769,9 @@ void ClientSession::processPacket(
 
 void ClientSession::forceDisconnect(bool connectionLost)
 {
-    qDebug() << "force disconnect user due to (connection lost) or (he sent a packet which hits ProtocolLimits::MaxPacketSize).";
+    qDebug() << "force disconnect user due to (connection lost) or (he sent a packet which hits ProtocolLimits::MaxPacketSize) or whatever...";
     m_connectionLost=connectionLost;
-    m_socket->disconnectFromHost();
+    m_socket->disconnectFromHost(); //would trigger onDisconnected()
 }
 
 QString ClientSession::formatRemainingTime(qint64 seconds)
@@ -792,7 +809,6 @@ QString ClientSession::formatRemainingTime(qint64 seconds)
 
 void ClientSession::onDisconnected()
 {
-
     if (m_user)
     {
         UserDisconnectedPacket dc;
@@ -802,6 +818,9 @@ void ClientSession::onDisconnected()
         qDebug() << "user " << m_user->username <<  "(" << m_user->id << ")  Disconnected.";
         sendToEveryone(PacketType::UserDisconnected, PacketHelpers::pack(dc));
 
+        m_user->udpRegistered=false; //make sure deny his udp requests too.
+        m_user->connected=false;
+        m_user->status=BeanChatCommon::Presence::Status::Offline;
         m_server->removeUser(m_user);
         m_user = nullptr;
     }

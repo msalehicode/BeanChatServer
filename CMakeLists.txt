@@ -36,8 +36,8 @@ target_compile_definitions(BeanChatServer PRIVATE
   DATABASE_FILE_NAME="server.db"
   AVATARS_DIRECTORY_NAME="avatars"
 
-  SERVER_VERSION="0.17.16"
-  CLIENT_MINIMUM_VERSION="0.25.23" #basic (which has updater to update database, files, and fixed)
+  SERVER_VERSION="0.19.22"
+  CLIENT_MINIMUM_VERSION="0.27.36"
 
   #default port
   DEFAULT_PORT=9987
@@ -69,6 +69,18 @@ install(TARGETS BeanChatServer
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+
+
+
+# debug tool to get sigfault infos.
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+target_compile_options(BeanChatServer PRIVATE
+   -fsanitize=address
+   -g)
+target_link_options(BeanChatServer PRIVATE
+   -fsanitize=address)
+endif()
+
 
 
 

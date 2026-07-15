@@ -205,6 +205,75 @@ QList<Channel*> Database::loadChannels()
 
     return channels;
 }
+
+
+
+QList<UserModel*> Database::loadAllUsers()
+{
+    QList<UserModel*> users;
+
+    QSqlQuery query;
+
+    if (!query.exec("SELECT * FROM users"))
+    {
+        qWarning() << "failed to load users error=" << query.lastError();
+        return users;
+    }
+
+    while (query.next())
+    {
+        UserModel* user = new UserModel;
+
+        user->id =
+            query.value("id").toULongLong();
+
+        user->identity =
+            query.value("identity").toString();
+
+        user->username =
+            query.value("username").toString();
+
+        user->avatarHash =
+            query.value("avatarHash").toString();
+
+        user->oldAvatarHash =
+            query.value("oldAvatarHash").toString();
+
+        user->isAdmin =
+            query.value("isAdmin").toBool();
+
+        user->banned =
+            query.value("banned").toBool();
+
+        user->banExpiresAt =
+            query.value("banExpiresAt").toLongLong();
+
+        user->banReason =
+            query.value("banReason").toString();
+
+        user->canTalk =
+            query.value("canTalk").toBool();
+
+        user->canChat =
+            query.value("canChat").toBool();
+
+        user->canShareVideo =
+            query.value("canShareVideo").toBool();
+
+        user->canCreateChannel =
+            query.value("canCreateChannel").toBool();
+
+        user->totalConnected =
+            query.value("totalConnected").toULongLong();
+
+        user->connected = false;
+
+        users.push_back(user);
+    }
+
+    return users;
+}
+
 bool Database::loginUser(UserModel *user)
 {
     QSqlQuery query;
