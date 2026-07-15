@@ -21,7 +21,6 @@ UdpServer::UdpServer(
         &QTimer::timeout,
         this,
         &UdpServer::sendPings);
-    m_pingTimer.start(UDP_SEND_PINGS_INTERVAL);
 
 
     //setup packetlosses timer
@@ -50,6 +49,13 @@ bool UdpServer::start(
 
 void UdpServer::sendPings()
 {
+    //stop timer if there is no user.
+    if(m_server->users().count()==0)
+    {
+        m_pingTimer.stop();
+        return;
+    }
+
     const qint64 now =
         QDateTime::currentMSecsSinceEpoch();
 
@@ -237,6 +243,10 @@ UserModel* UdpServer::findUser(
 
 void UdpServer::onReadyRead()
 {
+    //wake up ping timer if it's off
+    if(!m_pingTimer.isActive())
+        m_pingTimer.start(UDP_SEND_PINGS_INTERVAL);
+
     while(m_socket.hasPendingDatagrams())
     {
         auto datagram =
