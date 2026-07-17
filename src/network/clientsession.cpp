@@ -21,6 +21,12 @@ ClientSession::ClientSession(
         &ClientSession::onDisconnected);
 }
 
+ClientSession::~ClientSession()
+{
+    while (!m_uploads.isEmpty())
+        destroyUpload(m_uploads.begin(), true);
+}
+
 UserModel *ClientSession::user() const
 {
     return m_user;
@@ -303,6 +309,26 @@ void ClientSession::handleLogin(const QByteArray& payload)
     sendToSender(PacketType::LoginChallenge, PacketHelpers::pack(challenge));
 }
 
+quint64 ClientSession::nextUploadId()
+{
+    return m_nextUploadId++;
+}
+
+void ClientSession::destroyUpload(
+    QHash<quint64, UploadSession*>::iterator it,
+    bool removeFile)
+{
+    UploadSession *session = it.value();
+
+    session->file.close();
+
+    if (removeFile)
+        session->file.remove();
+
+    delete session;
+    m_uploads.erase(it);
+}
+
 void ClientSession::processPacket(
     const Packet& packet)
 {
@@ -572,23 +598,37 @@ void ClientSession::processPacket(
         auto msg = PacketHelpers::unpack<SendMessagePacket>(packet.payload);
 
 
-        //check if content is empty
-        if(msg.text.isEmpty())
+        //check if content is empty and has no attach ignore it
+        if(msg.text.isEmpty() && msg.attachmentId==0)
             break;
 
         //convert sendMessagePacket to ChatMessagePacket
         ChatMessagePacket cm;
         cm.senderId = m_user->id;
         cm.senderName = m_user->username;
-        cm.type = static_cast<ChatMessagePacket::Type>(msg.type);
+        cm.type = msg.type;
         cm.messageId=-1; //later increase this for each channel messages
         cm.text = msg.text;
-        cm.mediaPath = msg.mediaPath;
+        cm.attachmentId = msg.attachmentId;
+
+        //attach check other dont use this id easily
+        // Attachment attachment;
+        // if (msg.attachmentId != 0)
+        // {
+        //     if (!m_server->db()->findAttachment(msg.attachmentId, attachment))
+        //         break;
+
+        //     if (attachment.uploaderId != m_user->id)
+        //         break;
+
+        //     if (attachment.channelId != channel->id)
+        //         break;
+        // }
 
         qDebug() << "message received:"
                  << " text:" << msg.text
                  << " type:" << msg.type
-                 << " mediapath:" << msg.mediaPath;
+                 << " attachmentId:" << msg.attachmentId;
 
         //save message if needed
         if(channel->saveChats)
@@ -760,6 +800,420 @@ void ClientSession::processPacket(
 
     }break;
 
+    case PacketType::UploadFileBegin:
+    {
+        auto req = PacketHelpers::unpack<UploadFileBeginPacket>(packet.payload);
+
+        UploadFileBeginResponsePacket response;
+
+        response.success = false;
+        response.uploadId = 0;
+
+        if (!m_user)
+        {
+            response.error = "Not logged in.";
+            sendToSender(PacketType::UploadFileBeginResponse,
+                         PacketHelpers::pack(response));
+            break;
+        }
+
+        Channel *channel = m_user->currentChannel;
+        if (!channel)
+        {
+            response.error = "No channel.";
+            sendToSender(PacketType::UploadFileBeginResponse,
+                         PacketHelpers::pack(response));
+            break;
+        }
+
+
+
+        //check file name
+        if (req.filename.trimmed().isEmpty()
+            || req.filename.length() > 255
+            || req.filename.contains('/')
+            || req.filename.contains('\\'))
+        {
+            response.error = "Invalid filename.";
+
+            sendToSender(
+                PacketType::UploadFileBeginResponse,
+                PacketHelpers::pack(response));
+
+            break;
+        }
+
+
+        //check file size:
+        if (req.fileSize == 0)
+        {
+            response.error = "File is empty.";
+
+            sendToSender(
+                PacketType::UploadFileBeginResponse,
+                PacketHelpers::pack(response));
+
+            break;
+        }
+
+        if (req.fileSize > ProtocolLimits::MaxAttachmentSize)
+        {
+            response.error = "File is too large, max size="+
+                             QString::number(BeanChatCommon::ProtocolLimits::MaxAttachmentSize);
+
+            sendToSender(
+                PacketType::UploadFileBeginResponse,
+                PacketHelpers::pack(response));
+
+            break;
+        }
+
+        //mimi check
+        if (req.mimeType.length() > 128)
+        {
+            response.error = "Large mimiType.";
+
+            sendToSender(
+                PacketType::UploadFileBeginResponse,
+                PacketHelpers::pack(response));
+
+            break;
+        }
+
+
+
+
+        UploadSession *session = new UploadSession;
+
+        session->uploadId = nextUploadId();
+        session->channelId = channel->id;
+
+        session->originalFilename = req.filename;
+        session->mimeType = req.mimeType;
+
+        session->expectedSize = req.fileSize;
+        session->sha256 = req.sha256;
+
+        //create dir if not exsits
+        QDir dir(m_server->uploadsDirectory());
+        if (!dir.exists())
+            dir.mkpath(".");
+
+
+        // Temporary filename for now
+        QString tempPath = QString(m_server->uploadsDirectory()+"/%1.upload")
+                               .arg(session->uploadId);
+
+        session->file.setFileName(tempPath);
+
+        if (!session->file.open(QIODevice::WriteOnly))
+        {
+            response.error = "Cannot create upload file.";
+
+            delete session;
+
+            sendToSender(PacketType::UploadFileBeginResponse,
+                         PacketHelpers::pack(response));
+            break;
+        }
+
+        response.success = true;
+        response.uploadId = session->uploadId;
+
+        m_uploads.insert(session->uploadId, session);
+
+        sendToSender(PacketType::UploadFileBeginResponse,
+                     PacketHelpers::pack(response));
+
+        break;
+    }
+
+    case PacketType::UploadFileChunk:
+    {
+        auto chunk = PacketHelpers::unpack<UploadFileChunkPacket>(packet.payload);
+
+        auto it = m_uploads.find(chunk.uploadId);
+
+        if (it == m_uploads.end())
+            break;
+
+        //reject upload 0bytes foreever
+        if (chunk.payload.isEmpty())
+        {
+            destroyUpload(it, true);
+            break;
+        }
+
+        UploadSession *session = it.value();
+
+        // Prevent client from sending more data than promised
+        if (session->receivedSize + chunk.payload.size() > session->expectedSize)
+        {
+            qWarning() << "Upload exceeds expected size.";
+
+            destroyUpload(it, true);
+            break;
+        }
+
+        qint64 written = session->file.write(chunk.payload);
+
+        if (written != chunk.payload.size())
+        {
+            qWarning() << "Failed writing upload chunk.";
+
+            destroyUpload(it, true);
+            break;
+        }
+
+        session->receivedSize += written;
+
+        break;
+    }
+
+    case PacketType::UploadFileFinish:
+    {
+        auto finish =
+            PacketHelpers::unpack<UploadFileFinishPacket>(
+                packet.payload);
+
+        auto it = m_uploads.find(finish.uploadId);
+
+        if (it == m_uploads.end())
+            break;
+
+        UploadSession *session = it.value();
+
+        UploadFileFinishResponsePacket response;
+        response.success = false;
+        response.attachmentId = 0;
+
+        // Verify received size
+        if (session->receivedSize != session->expectedSize)
+        {
+            qWarning() << "Upload incomplete.";
+
+            response.error = "Upload incomplete.";
+
+            sendToSender(
+                PacketType::UploadFileFinishResponse,
+                PacketHelpers::pack(response));
+
+            destroyUpload(it, true);
+            break;
+        }
+
+
+        session->file.flush();
+        session->file.close();
+
+
+        // Verify SHA256
+        QFile file(session->file.fileName());
+
+        if (!file.open(QIODevice::ReadOnly))
+        {
+            response.error = "Failed reading uploaded file.";
+
+            sendToSender(
+                PacketType::UploadFileFinishResponse,
+                PacketHelpers::pack(response));
+
+            destroyUpload(it, true);
+            break;
+        }
+
+
+        QByteArray actualSha256 =
+            QCryptographicHash::hash(
+                file.readAll(),
+                QCryptographicHash::Sha256);
+
+        file.close();
+
+        if (actualSha256 != session->sha256)
+        {
+            qWarning() << "SHA256 mismatch.";
+
+            response.error = "Uploaded file is corrupted.";
+
+            sendToSender(
+                PacketType::UploadFileFinishResponse,
+                PacketHelpers::pack(response));
+
+            destroyUpload(it, true);
+            break;
+        }
+
+
+
+
+        // Generate permanent filename
+        QString storedFilename =
+            QUuid::createUuid().toString(
+                QUuid::WithoutBraces);
+
+        QString finalPath =
+            "uploads/" + storedFilename;
+
+        if (!QFile::rename(session->file.fileName(), finalPath))
+        {
+            qWarning() << "Failed moving uploaded file.";
+
+            response.error = "Failed storing file.";
+
+            sendToSender(
+                PacketType::UploadFileFinishResponse,
+                PacketHelpers::pack(response));
+
+            destroyUpload(it, true);
+            break;
+        }
+
+        Attachment attachment;
+
+        attachment.channelId = session->channelId;
+        attachment.uploaderId = m_user->id;
+
+        attachment.originalFilename = session->originalFilename;
+        attachment.storedFilename = storedFilename;
+
+        attachment.mimeType = session->mimeType;
+        attachment.size = session->receivedSize;
+
+        attachment.sha256 = session->sha256;
+        attachment.uploadedAt = QDateTime::currentDateTimeUtc();
+
+        quint64 attachmentId = m_server->db()->createAttachment(attachment);
+
+        if (attachmentId == 0)
+        {
+            QFile::remove(finalPath);
+
+            response.error = "Failed saving attachment.";
+
+            sendToSender(
+                PacketType::UploadFileFinishResponse,
+                PacketHelpers::pack(response));
+
+            destroyUpload(it, false);
+            break;
+        }
+
+        qDebug() << "Upload completed:"
+                 << attachment.originalFilename
+                 << attachmentId;
+
+        response.success = true;
+        response.attachmentId = attachmentId;
+
+        sendToSender(
+            PacketType::UploadFileFinishResponse,
+            PacketHelpers::pack(response));
+        destroyUpload(it, false);
+
+        break;
+    }
+
+    case PacketType::DownloadAttachment:
+    {
+        if (!m_user)
+            break;
+
+        auto req =
+            PacketHelpers::unpack<DownloadAttachmentPacket>(
+                packet.payload);
+
+        Attachment attachment =
+            m_server->db()->attachmentById(req.attachmentId);
+
+        DownloadAttachmentBeginPacket begin;
+
+        begin.success = false;
+        begin.attachmentId = req.attachmentId;
+
+        Channel *channel =m_server->findChannelById(attachment.channelId);
+        if (!channel)
+        {
+            begin.error = "Channel not found.";
+
+            sendToSender(
+                PacketType::DownloadAttachmentBegin,
+                PacketHelpers::pack(begin));
+
+            break;
+        }
+
+        if (m_user->currentChannel != channel && !m_user->isAdmin)
+        {
+            begin.error = "Access denied.";
+
+            sendToSender(
+                PacketType::DownloadAttachmentBegin,
+                PacketHelpers::pack(begin));
+
+            break;
+        }
+
+        if (attachment.id == 0)
+        {
+            begin.error = "Attachment not found.";
+
+            sendToSender(
+                PacketType::DownloadAttachmentBegin,
+                PacketHelpers::pack(begin));
+
+            break;
+        }
+
+        QFile file(m_server->uploadsDirectory()+"/" + attachment.storedFilename);
+
+        if (!file.open(QIODevice::ReadOnly))
+        {
+            begin.error = "Cannot open attachment.";
+
+            sendToSender(
+                PacketType::DownloadAttachmentBegin,
+                PacketHelpers::pack(begin));
+
+            break;
+        }
+
+        begin.success = true;
+        begin.filename = attachment.originalFilename;
+        begin.mimeType = attachment.mimeType;
+        begin.size = attachment.size;
+        begin.sha256 = attachment.sha256;
+
+        sendToSender(
+            PacketType::DownloadAttachmentBegin,
+            PacketHelpers::pack(begin));
+
+        const int ChunkSize = 64 * 1024;
+
+        while (!file.atEnd())
+        {
+            DownloadAttachmentChunkPacket chunk;
+
+            chunk.attachmentId = attachment.id;
+            chunk.payload = file.read(ChunkSize);
+
+            sendToSender(
+                PacketType::DownloadAttachmentChunk,
+                PacketHelpers::pack(chunk));
+        }
+
+        file.close();
+
+        DownloadAttachmentFinishPacket finish;
+
+        finish.attachmentId = attachment.id;
+
+        sendToSender(
+            PacketType::DownloadAttachmentFinish,
+            PacketHelpers::pack(finish));
+
+        break;
+    }
 
     default:
         break;
@@ -818,8 +1272,6 @@ void ClientSession::onDisconnected()
         qDebug() << "user " << m_user->username <<  "(" << m_user->id << ")  Disconnected.";
         sendToEveryone(PacketType::UserDisconnected, PacketHelpers::pack(dc));
 
-        m_user->udpRegistered=false; //make sure deny his udp requests too.
-        m_user->connected=false;
         m_user->status=BeanChatCommon::Presence::Status::Offline;
         m_server->removeUser(m_user);
         m_user = nullptr;

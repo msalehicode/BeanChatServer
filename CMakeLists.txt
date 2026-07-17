@@ -27,6 +27,9 @@ add_executable(BeanChatServer
   src/models/user.h
   src/models/channel.h
   src/network/udpserver.h src/network/udpserver.cpp
+  src/server/uploadsession.h
+  src/models/attachment.h
+  src/models/message.h
 
 )
 
@@ -36,7 +39,7 @@ target_compile_definitions(BeanChatServer PRIVATE
   DATABASE_FILE_NAME="server.db"
   AVATARS_DIRECTORY_NAME="avatars"
 
-  SERVER_VERSION="0.19.22"
+  SERVER_VERSION="0.20.22"
   CLIENT_MINIMUM_VERSION="0.27.36"
 
   #default port

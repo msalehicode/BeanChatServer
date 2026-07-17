@@ -134,13 +134,16 @@ public:
 
 
     bool updateUserActivityStatus(UserModel *user, const QString &newStatus);
+    Database *db() const;
+
+    QString uploadsDirectory() const;
 private slots:
     void onNewConnection();
 
 
 private:
     ServerInfo m_info;
-
+    const QString m_uploadsDirectoryName = "uploads";
     quint64 m_nextUserId = 1;
 
     Database* m_db=nullptr;

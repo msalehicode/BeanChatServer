@@ -100,6 +100,16 @@ void Server::onNewConnection()
     }
 }
 
+QString Server::uploadsDirectory() const
+{
+    return m_uploadsDirectoryName;
+}
+
+Database *Server::db() const
+{
+    return m_db;
+}
+
 QList<UserModel *> Server::allUsers() const
 {
     return m_allUsers;
@@ -266,6 +276,25 @@ void Server::removeUser(UserModel *user)
     if (user->currentChannel)
         user->currentChannel->users.removeAll(user);
 
+    //reset user's temp info from m_allUsers
+    user->socket = nullptr;
+    user->udpRegistered=false;
+    user->ip.clear();
+    user->port=0;
+    user->udpAddress.clear();
+    user->udpPort=0;
+    user->appVersion ="";
+    user->buildType = "";
+    user->machineId = "";
+    user->machineName = "";
+    user->osName = "";
+    user->osVersion = "";
+    user->connectedSince =0;
+    user->connected=false;
+    user->currentChannel=nullptr;
+
+
+    //remove user from m_users but it lives on m_allUsers
     m_users.removeAll(user);
 }
 

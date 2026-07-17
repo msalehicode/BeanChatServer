@@ -68,15 +68,36 @@ bool Database::createTables()
         "updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
         ");");
 
-    query.exec(
-        "CREATE TABLE IF NOT EXISTS messages ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        "channelId INTEGER,"
-        "senderId INTEGER,"
-        "message TEXT,"
-        "createdAt DATETIME DEFAULT CURRENT_TIMESTAMP"
-        ");");
+    query.exec(R"(
+    CREATE TABLE IF NOT EXISTS messages
+    (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        channelId INTEGER NOT NULL,
+        senderId INTEGER NOT NULL,
+        type INTEGER NOT NULL,
+        text TEXT,
+        attachmentId INTEGER DEFAULT NULL,
+        edited INTEGER NOT NULL DEFAULT 0,
+        deleted INTEGER NOT NULL DEFAULT 0,
+        createdAt INTEGER,
+        updatedAt INTEGER
+    );
+    )");
 
+    query.exec(R"(
+    CREATE TABLE IF NOT EXISTS attachments
+    (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        channelId INTEGER NOT NULL,
+        uploaderId INTEGER NOT NULL,
+        originalFilename TEXT NOT NULL,
+        storedFilename TEXT NOT NULL,
+        mimeType TEXT,
+        size INTEGER,
+        sha256 BLOB,
+        uploadedAt INTEGER
+    );
+    )");
     qDebug()
         << "Database initialized";
 
@@ -587,4 +608,407 @@ bool Database::isAvatarHashUsedByAnotherUser(const QString &avatarHash)
         return false;
 
     return query.value(0).toInt() > 1;
+}
+
+
+
+quint64 Database::createAttachment(const Attachment &attachment)
+{
+    QSqlQuery query;
+
+    query.prepare(R"(
+        INSERT INTO attachments
+        (
+            channelId,
+            uploaderId,
+            originalFilename,
+            storedFilename,
+            mimeType,
+            size,
+            sha256,
+            uploadedAt
+        )
+        VALUES
+        (
+            :channelId,
+            :uploaderId,
+            :originalFilename,
+            :storedFilename,
+            :mimeType,
+            :size,
+            :sha256,
+            :uploadedAt
+        )
+    )");
+
+    query.bindValue(":channelId", attachment.channelId);
+    query.bindValue(":uploaderId", attachment.uploaderId);
+    query.bindValue(":originalFilename", attachment.originalFilename);
+    query.bindValue(":storedFilename", attachment.storedFilename);
+    query.bindValue(":mimeType", attachment.mimeType);
+    query.bindValue(":size", attachment.size);
+    query.bindValue(":sha256", attachment.sha256);
+    query.bindValue(":uploadedAt", attachment.uploadedAt.toSecsSinceEpoch());
+
+    if (!query.exec())
+    {
+        qWarning() << query.lastError();
+        return 0;
+    }
+
+    return query.lastInsertId().toULongLong();
+}
+
+
+
+bool Database::deleteAttachment(quint64 attachmentId)
+{
+    QSqlQuery query;
+
+    query.prepare(
+        "DELETE FROM attachments "
+        "WHERE id=:id");
+
+    query.bindValue(":id", attachmentId);
+
+    if (!query.exec())
+    {
+        qWarning() << query.lastError();
+        return false;
+    }
+
+    return true;
+}
+
+
+Attachment Database::attachment(quint64 attachmentId)
+{
+    Attachment attachment;
+
+    QSqlQuery query;
+
+    query.prepare(
+        "SELECT * "
+        "FROM attachments "
+        "WHERE id=:id");
+
+    query.bindValue(":id", attachmentId);
+
+    if (!query.exec())
+    {
+        qWarning() << query.lastError();
+        return attachment;
+    }
+
+    if (!query.next())
+        return attachment;
+
+    attachment.id = query.value("id").toULongLong();
+    attachment.channelId = query.value("channelId").toULongLong();
+    attachment.uploaderId = query.value("uploaderId").toULongLong();
+
+    attachment.originalFilename =
+        query.value("originalFilename").toString();
+
+    attachment.storedFilename =
+        query.value("storedFilename").toString();
+
+    attachment.mimeType =
+        query.value("mimeType").toString();
+
+    attachment.size =
+        query.value("size").toULongLong();
+
+    attachment.sha256 =
+        query.value("sha256").toByteArray();
+
+    attachment.uploadedAt =
+        QDateTime::fromSecsSinceEpoch(
+            query.value("uploadedAt").toLongLong());
+
+    return attachment;
+}
+
+
+QList<Attachment> Database::attachmentsForChannel(quint64 channelId)
+{
+    QList<Attachment> attachments;
+
+    QSqlQuery query;
+
+    query.prepare(
+        "SELECT * "
+        "FROM attachments "
+        "WHERE channelId=:channelId "
+        "ORDER BY uploadedAt ASC");
+
+    query.bindValue(":channelId", channelId);
+
+    if (!query.exec())
+    {
+        qWarning() << query.lastError();
+        return attachments;
+    }
+
+    while (query.next())
+    {
+        Attachment attachment;
+
+        attachment.id =
+            query.value("id").toULongLong();
+
+        attachment.channelId =
+            query.value("channelId").toULongLong();
+
+        attachment.uploaderId =
+            query.value("uploaderId").toULongLong();
+
+        attachment.originalFilename =
+            query.value("originalFilename").toString();
+
+        attachment.storedFilename =
+            query.value("storedFilename").toString();
+
+        attachment.mimeType =
+            query.value("mimeType").toString();
+
+        attachment.size =
+            query.value("size").toULongLong();
+
+        attachment.sha256 =
+            query.value("sha256").toByteArray();
+
+        attachment.uploadedAt =
+            QDateTime::fromSecsSinceEpoch(
+                query.value("uploadedAt").toLongLong());
+
+        attachments.push_back(attachment);
+    }
+
+    return attachments;
+}
+
+
+Attachment Database::attachmentById(quint64 attachmentId)
+{
+    Attachment attachment;
+
+    QSqlQuery query(m_db);
+
+    query.prepare(R"(
+        SELECT
+            id,
+            channelId,
+            uploaderId,
+            originalFilename,
+            storedFilename,
+            mimeType,
+            size,
+            sha256,
+            uploadedAt
+        FROM attachments
+        WHERE id = ?
+    )");
+
+    query.addBindValue(attachmentId);
+
+    if (!query.exec())
+        return attachment;
+
+    if (!query.next())
+        return attachment;
+
+    attachment.id = query.value(0).toULongLong();
+    attachment.channelId = query.value(1).toULongLong();
+    attachment.uploaderId = query.value(2).toULongLong();
+
+    attachment.originalFilename = query.value(3).toString();
+    attachment.storedFilename = query.value(4).toString();
+
+    attachment.mimeType = query.value(5).toString();
+    attachment.size = query.value(6).toULongLong();
+
+    attachment.sha256 = query.value(7).toByteArray();
+    attachment.uploadedAt = query.value(8).toDateTime();
+
+    return attachment;
+}
+
+
+quint64 Database::createMessage(const Message &message)
+{
+    QSqlQuery query;
+
+    query.prepare(R"(
+        INSERT INTO messages
+        (
+            channelId,
+            senderId,
+            type,
+            text,
+            attachmentId,
+            edited,
+            deleted,
+            createdAt,
+            updatedAt
+        )
+        VALUES
+        (
+            :channelId,
+            :senderId,
+            :type,
+            :text,
+            :attachmentId,
+            :edited,
+            :deleted,
+            :createdAt,
+            :updatedAt
+        )
+    )");
+
+    query.bindValue(":channelId", message.channelId);
+    query.bindValue(":senderId", message.senderId);
+    query.bindValue(":type", message.type);
+    query.bindValue(":text", message.text);
+
+    if (message.attachmentId == 0)
+        query.bindValue(":attachmentId", QVariant(QVariant::ULongLong));
+    else
+        query.bindValue(":attachmentId", message.attachmentId);
+
+    query.bindValue(":edited", message.edited);
+    query.bindValue(":deleted", message.deleted);
+    query.bindValue(":createdAt", message.createdAt.toSecsSinceEpoch());
+    query.bindValue(":updatedAt", message.updatedAt.toSecsSinceEpoch());
+
+    if (!query.exec())
+    {
+        qWarning() << query.lastError();
+        return 0;
+    }
+
+    return query.lastInsertId().toULongLong();
+}
+
+
+
+QList<Message> Database::loadMessages(
+    quint64 channelId,
+    int offset,
+    int limit)
+{
+    QList<Message> messages;
+
+    QSqlQuery query;
+
+    query.prepare(R"(
+        SELECT *
+        FROM messages
+        WHERE channelId=:channelId
+        ORDER BY id DESC
+        LIMIT :limit OFFSET :offset
+    )");
+
+    query.bindValue(":channelId", channelId);
+    query.bindValue(":limit", limit);
+    query.bindValue(":offset", offset);
+
+    if (!query.exec())
+    {
+        qWarning() << query.lastError();
+        return messages;
+    }
+
+    while (query.next())
+    {
+        Message message;
+
+        message.id = query.value("id").toULongLong();
+        message.channelId = query.value("channelId").toULongLong();
+        message.senderId = query.value("senderId").toULongLong();
+        message.type = query.value("type").toInt();
+
+        message.text = query.value("text").toString();
+
+        if (!query.value("attachmentId").isNull())
+            message.attachmentId =
+                query.value("attachmentId").toULongLong();
+
+        message.edited =
+            query.value("edited").toBool();
+
+        message.deleted =
+            query.value("deleted").toBool();
+
+        message.createdAt =
+            QDateTime::fromSecsSinceEpoch(
+                query.value("createdAt").toLongLong());
+
+        message.updatedAt =
+            QDateTime::fromSecsSinceEpoch(
+                query.value("updatedAt").toLongLong());
+
+        messages.push_back(message);
+    }
+
+    std::reverse(messages.begin(), messages.end());
+
+    return messages;
+}
+
+
+bool Database::editMessage(
+    quint64 messageId,
+    const QString &text)
+{
+    QSqlQuery query;
+
+    query.prepare(R"(
+        UPDATE messages
+        SET
+            text=:text,
+            edited=1,
+            updatedAt=:updatedAt
+        WHERE id=:id
+    )");
+
+    query.bindValue(":text", text);
+    query.bindValue(":updatedAt",
+                    QDateTime::currentSecsSinceEpoch());
+    query.bindValue(":id", messageId);
+
+    if (!query.exec())
+    {
+        qWarning() << query.lastError();
+        return false;
+    }
+
+    return true;
+}
+
+
+bool Database::deleteMessage(quint64 messageId)
+{
+    QSqlQuery query;
+
+    query.prepare(R"(
+        UPDATE messages
+        SET
+            deleted=1,
+            text='',
+            updatedAt=:updatedAt
+        WHERE id=:id
+    )");
+
+    query.bindValue(":updatedAt",
+                    QDateTime::currentSecsSinceEpoch());
+    query.bindValue(":id", messageId);
+
+    if (!query.exec())
+    {
+        qWarning() << query.lastError();
+        return false;
+    }
+
+    return true;
 }

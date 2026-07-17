@@ -15,11 +15,14 @@ using namespace BeanChatCommon;
 
 #include "../server/server.h"
 #include "../models/user.h"
+#include "../server/uploadsession.h"
 
 #include <QDebug>
-
+#include <QUuid>
+#include <QFile>
 
 #include <QVersionNumber>
+#include <QCryptographicHash>
 
 class Server;
 class UserModel;
@@ -32,6 +35,8 @@ public:
     explicit ClientSession(
         QTcpSocket* socket,
         Server* server);
+
+    ~ClientSession();
 
     UserModel* user() const;
 
@@ -64,6 +69,14 @@ private:
     //login stuff
     LoginRequestPacket m_pendingLogin;
     QByteArray m_pendingChallenge;
+
+    //uploads
+    QHash<quint64, UploadSession*> m_uploads;
+    quint64 m_nextUploadId = 1;
+    quint64 nextUploadId();
+    void destroyUpload(
+        QHash<quint64, UploadSession*>::iterator it,
+        bool removeFile);
 
     QTcpSocket* m_socket;
     Server* m_server;
