@@ -10,6 +10,7 @@
 
 #include <QDateTime>
 #include <QDebug>
+#include <QTimer>
 
 #include <QSqlQuery>
 #include <QVariant>
@@ -56,6 +57,9 @@ public:
     const QVersionNumber minimumVersion = QVersionNumber::fromString(CLIENT_MINIMUM_VERSION);
 
     explicit Server(Database* db, QObject* parent = nullptr);
+
+    QElapsedTimer lastTcpActivity; //to keep last tcp action on server, users may work over udp for hours but tcp becomes free so OS closes idle tcp sockets, so we dont like this
+
 
     bool start(quint16 port,
                quint16 udpPort);
@@ -145,6 +149,12 @@ private:
     ServerInfo m_info;
     const QString m_uploadsDirectoryName = "uploads";
     quint64 m_nextUserId = 1;
+
+    /*
+     every e.g 2min check user's last TCP activity if it exceed send him a IsEverythingOk to user and wait for his
+    response YesEverythingIsOk to keep TCP alive (idle tcp sockets are closed by os like if it exceed 5min)
+    */
+    QTimer m_keepIsTcpAlive;
 
     Database* m_db=nullptr;
     QTcpServer m_server;

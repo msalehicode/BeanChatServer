@@ -54,6 +54,8 @@ void ClientSession::sendToEveryone(
     packet.type = type;
     packet.payload = payload;
 
+    m_server->lastTcpActivity.restart(); //keep track of when was last time we sent something to everyone.
+
     QByteArray bytes = packet.serialize();
 
     for (UserModel *user : m_server->users())
@@ -336,6 +338,11 @@ void ClientSession::processPacket(
 
     switch(packet.type)
     {
+    case PacketType::YesEverythingIsOk:
+    {
+        // m_server->lastTcpActivity.restart(); //i guess no need to perform action for this.
+        break;
+    }
     case PacketType::LoginRequest:
     {
         //check for version, username , identity/public-key are valid then make a challange send to client wait for response

@@ -6,6 +6,33 @@ Server::Server(Database *db,
     m_db(db),
     QObject(parent)
 {
+    //keepIs Tcp sockets Alive when there is no TCP action for a while (max 5min tcp goes idle and close connections)
+    lastTcpActivity.start();
+    m_keepIsTcpAlive.setInterval(10000); // check every 10s second
+    connect(&m_keepIsTcpAlive, &QTimer::timeout, this, [this]()
+            {
+                //if server didnt have any action (sendToEveryone) for a while so we send a dummy Packet to keep TCP alive (to prevent close idle TCP)
+                if (lastTcpActivity.elapsed() >= 120000) // 2 minutes
+                {
+                    // Send IsEverythingOk packet here
+                    Packet packet;
+                    packet.type = PacketType::IsEverythingsOk;
+
+                    QByteArray bytes = packet.serialize();
+
+                    for (UserModel *user : m_users)
+                    {
+                        if (user->socket)
+                            user->socket->write(bytes);
+                    }
+
+                    // reset timer
+                    lastTcpActivity.restart();
+                }
+            });
+    m_keepIsTcpAlive.start();
+
+
     //read channels from database
     m_channels = m_db->loadChannels();
     printChannels();
