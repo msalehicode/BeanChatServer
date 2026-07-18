@@ -158,6 +158,7 @@ UserModel* Server::findUserByIdentity(const QString& identity)
     return nullptr;
 }
 
+
 UserModel* Server::loginUser(
     const LoginRequestPacket& req,
     QTcpSocket* socket,
@@ -201,17 +202,19 @@ UserModel* Server::loginUser(
     user->socket = socket;
     user->ip =socket->peerAddress().toString();
     user->port =socket->peerPort();
+
+    //fill received info about his app and system
     user->appVersion = req.appVersion;
     user->buildType = req.buildType;
     user->machineId = req.machineId;
     user->machineName = req.machineName;
     user->osName = req.osName;
     user->osVersion = req.osVersion;
-    user->connectedSince = QDateTime::currentSecsSinceEpoch();
-    user->currentChannel=nullptr;
+
+    //reset user status, statistic varabiles (RUN TIME SHOULD RESET ON EVERY NEW SESSION)
+    user->resetSession();
 
     //check if received status is valid or not
-    qDebug() << "login user, received status=" << static_cast<int>(req.status);
     if(BeanChatCommon::isValidPresenceStatus(req.status))
         user->status=req.status;
     else
@@ -257,6 +260,7 @@ UserModel* Server::loginUser(
     }
 
     qDebug() << req.username << "logged in";
+    user->totalConnected++;
 
     //check does this user own a channel?! if yes update that channel's owner pointer
     for(Channel* channel : m_channels)
@@ -271,6 +275,7 @@ UserModel* Server::loginUser(
         m_allUsers.push_back(user);
 
     user->connected=true;
+    user->connectedSince = QDateTime::currentSecsSinceEpoch();
     m_users.push_back(user);
     return user;
 }
