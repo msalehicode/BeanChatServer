@@ -687,7 +687,7 @@ void ClientSession::processPacket(
             }
         }
 
-        for(UserModel* user : m_server->users())
+        for(UserModel* user : m_server->allUsers())
         {
             //find asked users by their Id
             if(p.notFoundIds.contains(user->id))
