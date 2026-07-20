@@ -358,6 +358,7 @@ void Server::disconnectUser(UserModel *user, bool connectionLost)
 Channel* Server::createChannel(
     const QString& name,
     const QString& password,
+    ChannelType::Type type,
     bool saveChats,
     UserModel* owner)
 {
@@ -365,7 +366,10 @@ Channel* Server::createChannel(
 
     channel->name = name;
     channel->password = password;
+    channel->type = type;
+
     channel->saveChats = saveChats;
+
     channel->displayOrder = m_channels.size();
 
     if(owner)
@@ -385,9 +389,10 @@ Channel* Server::createChannel(
     }
 
     qDebug()
-        << "Channel created:"
-        << channel->id
-        << channel->name;
+        << "Channel created, id:"
+        << channel->id << " name:"
+        << channel->name << " type:"
+        << channel->type;
 
     m_channels.push_back(channel);
 
@@ -736,11 +741,99 @@ int Server::changeUserStatus(PacketType type,
     return -1;
 }
 
+bool Server::joinTextChannel(UserModel* user,
+                                   quint64 channelId,
+                                   const QString& password,
+                             BeanChatCommon::ChatMessageChunkPacket& chunkResult)
+{
+    if(!user)
+        return false; //invalid user
+
+
+    //find channel by id
+    Channel* target = nullptr;
+    for(auto channel : m_channels)
+    {
+        if(channel->id == channelId)
+        {
+            target = channel;
+            break;
+        }
+    }
+    if(!target)
+    {
+        qDebug() << "channel not found";
+        return false;
+    }
+
+    if(target->type != ChannelType::Type::Text)
+    {
+        qDebug() << "cannot get data of non-TextChannel type!";
+        return false;
+    }
+
+    if(!target->password.isEmpty()
+        && target->password != password)
+    {
+        qDebug() << "wrong password";
+        return false;
+    }
+
+    chunkResult.channelId=target->id;
+
+    if(!target->saveChats)
+    {
+        qDebug() << "save chats is off no need to load anything";
+        return true;
+    }
+
+
+    //load latest messages and send back
+    QList<Message> latestMessages = m_db->loadMessages(channelId, 0,50); //return latest messages only 50 items
+
+    for (const Message &msg : latestMessages)
+    {
+        QString senderName = user->username;
+        chunkResult.messages.append(Message::toPacket(msg, senderName));
+    }
+
+
+    return true;
+}
+
 QByteArray Server::joinChannel(
     UserModel* user,
     quint64 channelId,
-    const QString& password)
+    const QString& password,
+    ChatMessageChunkPacket& chunkResult)
 {
+    if(!user)
+        return QByteArray(); //invalid user
+
+    //user wants to leave channel and become channel-less:) if asks for join channel id 0
+    if(channelId==0)
+    {
+        //find current channel of user and remove him from that
+        quint64 userOldChannel=0;
+        if(user->currentChannel)
+        {
+            userOldChannel= user->currentChannel->id;
+            user->currentChannel->users.removeAll(user);
+            user->currentChannel=nullptr;
+        }
+        else
+            return QByteArray(); //user isn't in any channel therefore can't left it
+
+
+        UserJoinedChannelPacket ujs;
+        ujs.channelId = 0;
+        ujs.userId = user->id;
+        ujs.oldChannelId = userOldChannel;
+        return PacketHelpers::pack(ujs);
+    }
+
+
+
     //find channel by id
     Channel* target = nullptr;
     for(auto channel : m_channels)
@@ -757,11 +850,26 @@ QByteArray Server::joinChannel(
         return QByteArray();
     }
 
+    if(target->type == ChannelType::Type::Text)
+    {
+        qDebug() << "cannot join channel with type text!";
+        return QByteArray();
+    }
+
     if(!target->password.isEmpty()
-         && target->password != password)
+        && target->password != password)
     {
         qDebug() << "wrong password";
         return QByteArray();
+    }
+
+    if(user->currentChannel)
+    {
+        if(target->id == user->currentChannel->id)
+        {
+            qDebug() << "cannot join channel, you are already in that channel!";
+            return QByteArray();
+        }
     }
 
     //check if user had a current channel, then remove him from that channel
@@ -791,6 +899,20 @@ QByteArray Server::joinChannel(
     ujs.oldChannelId = userOldChannel;
 
 
+    //load latest messages and send to sender
+    if(target->saveChats)
+    {
+        //load latest messages and send back
+        QList<Message> latestMessages = m_db->loadMessages(target->id, 0,50); //return latest messages only 50 items
+
+        for (const Message &msg : latestMessages)
+        {
+            QString senderName = user->username;
+            chunkResult.messages.append(Message::toPacket(msg, senderName));
+        }
+        chunkResult.channelId=target->id;
+    }
+
     return PacketHelpers::pack(ujs);
 }
 
@@ -813,6 +935,7 @@ QByteArray Server::buildServerState()
 
         info.id = channel->id;
         info.name = channel->name;
+        info.type = channel->type;
         info.isLocked = (channel->password.isEmpty() ? false : true);
         info.saveChats = channel->saveChats;
 

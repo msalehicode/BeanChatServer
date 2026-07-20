@@ -3,6 +3,7 @@
 #include <QString>
 #include <QList>
 #include <QDateTime>
+#include <protocol/commonTypes.h>
 
 class UserModel;
 
@@ -13,8 +14,8 @@ public:
     quint64 id = 0;
 
     QString name;
-
     QString password;
+    BeanChatCommon::ChannelType::Type type = BeanChatCommon::ChannelType::Type::Voice;
 
     UserModel* owner=nullptr;
     QString ownerIdentity;

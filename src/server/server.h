@@ -79,7 +79,7 @@ public:
 
     Channel* createChannel(
         const QString& name,
-        const QString& password,
+        const QString& password, ChannelType::Type type,
         bool saveChats,
         UserModel *owner=nullptr);
 
@@ -96,7 +96,8 @@ public:
     QByteArray joinChannel(
         UserModel* user,
         quint64 channelId,
-        const QString& password);
+        const QString& password,
+        ChatMessageChunkPacket& chunkResult);
 
     QList<UserModel*> users() const;
     QList<UserModel *> allUsers() const;
@@ -141,6 +142,7 @@ public:
     Database *db() const;
 
     QString uploadsDirectory() const;
+    bool joinTextChannel(UserModel *user, quint64 channelId, const QString &password, BeanChatCommon::ChatMessageChunkPacket &chunkResult);
 private slots:
     void onNewConnection();
 

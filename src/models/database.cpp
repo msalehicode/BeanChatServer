@@ -61,6 +61,7 @@ bool Database::createTables()
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
         "name TEXT NOT NULL,"
         "password TEXT,"
+        "type INTEGER NOT NULL DEFAULT 1,"//0-> unknown, 1 -> voice, 2->text
         "ownerIdentity TEXT,"
         "saveChats INTEGER NOT NULL DEFAULT 0,"
         "displayOrder INTEGER NOT NULL DEFAULT 0,"
@@ -112,12 +113,13 @@ bool Database::createChannel(Channel *channel)
 
     query.prepare(
         "INSERT INTO channels "
-        "(name,password,ownerIdentity,saveChats,displayOrder)"
+        "(name,password,type,ownerIdentity,saveChats,displayOrder)"
         "VALUES"
-        "(:name,:password,:owner,:saveChats,:displayOrder)");
+        "(:name,:password,:type,:owner,:saveChats,:displayOrder)");
 
     query.bindValue(":name", channel->name);
     query.bindValue(":password", channel->password);
+    query.bindValue(":type", static_cast<int>(channel->type));
     query.bindValue(":owner", channel->ownerIdentity);
     query.bindValue(":saveChats", channel->saveChats);
     query.bindValue(":displayOrder", channel->displayOrder);
@@ -205,6 +207,9 @@ QList<Channel*> Database::loadChannels()
 
         channel->password =
             query.value("password").toString();
+
+        channel->type =
+            static_cast<BeanChatCommon::ChannelType::Type>(query.value("type").toInt());
 
         channel->ownerIdentity =
             query.value("ownerIdentity").toString();
@@ -926,7 +931,7 @@ QList<Message> Database::loadMessages(
         message.id = query.value("id").toULongLong();
         message.channelId = query.value("channelId").toULongLong();
         message.senderId = query.value("senderId").toULongLong();
-        message.type = query.value("type").toInt();
+        message.type = static_cast<BeanChatCommon::Msg::Type>(query.value("type").toInt());
 
         message.text = query.value("text").toString();
 

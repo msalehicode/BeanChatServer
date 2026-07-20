@@ -50,6 +50,7 @@ public:
     void forceDisconnect(bool connectionLost);
 
     QString formatRemainingTime(qint64 seconds);
+    quint64 saveMessage(quint64 channelId, const SendMessagePacket &msg);
 private slots:
     void onReadyRead();
     void onDisconnected();

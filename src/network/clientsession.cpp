@@ -408,6 +408,7 @@ void ClientSession::processPacket(
         Channel* channelCreated = m_server->createChannel(
             req.name,
             req.password,
+            req.type,
             req.saveChats,
             m_user); //m_user as owner
 
@@ -416,6 +417,7 @@ void ClientSession::processPacket(
             ChannelCreatedPacket cc;
             cc.id = channelCreated->id;
             cc.name = channelCreated->name;
+            cc.type  = channelCreated->type;
             cc.saveChats = channelCreated->saveChats;
 
             if(!channelCreated->password.isEmpty())
@@ -511,58 +513,73 @@ void ClientSession::processPacket(
     case PacketType::MoveUser:
     {
         //check for user logged in?
-        if(!m_user)
-            break;
+        // if(!m_user)
+        //     break;
 
-        auto req = PacketHelpers::unpack<MoveUserPacket>(packet.payload);
+        // auto req = PacketHelpers::unpack<MoveUserPacket>(packet.payload);
 
-        //prevent selfmove,
-        if(req.userId == m_user->id)
-        {
-            QByteArray channelResponse = m_server->joinChannel(m_user, req.channelId, req.channelPassword);
-            if(channelResponse.isEmpty())
-            {
-                qDebug() << "notify user, channel not found or password is incorrect";
-                break;
-            }
+        // //prevent selfmove,
+        // if(req.userId == m_user->id)
+        // {
+        //     ChatMessageChunkPacket savedMessageChunk;
+        //     QByteArray channelResponse = m_server->joinChannel(m_user, req.channelId, req.channelPassword, savedMessageChunk);
+        //     if(channelResponse.isEmpty())
+        //     {
+        //         qDebug() << "notify user, channel not found or password is incorrect";
+        //         break;
+        //     }
 
-            sendToEveryone(PacketType::UserJoinedChannel, channelResponse);
+        //     sendToEveryone(PacketType::UserJoinedChannel, channelResponse);
 
-            m_server->printChannelWithUsersIn();
-            break;
-        }
+        //     m_server->printChannelWithUsersIn();
+        //     break;
+        // }
 
 
 
         //check permission
-        if(m_user->isAdmin)
-        {
-            UserModel* targetUser = m_server->findUser(req.userId);
-            if(targetUser)
-            {
-                QByteArray channelResponse = m_server->joinChannel(targetUser, req.channelId, req.channelPassword);
-                if(channelResponse.isEmpty())
-                {
-                    qDebug() << "notify user, channel not found or password is incorrect";
-                    break;
-                }
+        // if(m_user->isAdmin)
+        // {
+        //     UserModel* targetUser = m_server->findUser(req.userId);
+        //     if(targetUser)
+        //     {
+        //         QByteArray channelResponse = m_server->joinChannel(targetUser, req.channelId, req.channelPassword);
+        //         if(channelResponse.isEmpty())
+        //         {
+        //             qDebug() << "notify user, channel not found or password is incorrect";
+        //             break;
+        //         }
 
-                sendToEveryone(PacketType::UserMoved, channelResponse);
+        //         sendToEveryone(PacketType::UserMoved, channelResponse);
 
-                m_server->printChannelWithUsersIn();
-            }
-            else
-                qDebug() << "invalid user to move";
+        //         m_server->printChannelWithUsersIn();
+        //     }
+        //     else
+        //         qDebug() << "invalid user to move";
 
-        }
-        else
-            qDebug() << "dont have permission to move user.";
+        // }
+        // else
+        //     qDebug() << "dont have permission to move user.";
 
 
 
         break;
     }
 
+    case PacketType::JoinTextChannel:
+    {
+        //check for user logged in?
+        if(!m_user)
+            break;
+
+        auto req = PacketHelpers::unpack<JoinChannelPacket>(packet.payload);
+
+        BeanChatCommon::ChatMessageChunkPacket chatChunk;
+        if(m_server->joinTextChannel(m_user, req.channelId,req.password,chatChunk))
+            sendToSender(PacketType::ChatMessageChunk,  PacketHelpers::pack(chatChunk));
+
+        break;
+    }
 
     case PacketType::JoinChannel:
     {
@@ -572,7 +589,8 @@ void ClientSession::processPacket(
 
         auto req = PacketHelpers::unpack<JoinChannelPacket>(packet.payload);
 
-        QByteArray channelResponse = m_server->joinChannel(m_user, req.channelId, req.password);
+        ChatMessageChunkPacket savedMessageChunk;
+        QByteArray channelResponse = m_server->joinChannel(m_user, req.channelId, req.password, savedMessageChunk);
         if(channelResponse.isEmpty())
         {
             qDebug() << "notify user, channel not found or password is incorrect";
@@ -580,6 +598,13 @@ void ClientSession::processPacket(
         }
 
         sendToEveryone(PacketType::UserJoinedChannel, channelResponse);
+
+        //check if there is saved message send to client
+        if(!savedMessageChunk.messages.isEmpty())
+        {
+            //send saved message chunk:
+            sendToSender(PacketType::ChatMessageChunk, PacketHelpers::pack(savedMessageChunk));
+        }
 
         m_server->printChannelWithUsersIn();
         break;
@@ -592,15 +617,6 @@ void ClientSession::processPacket(
         if(!m_user)
             break;
 
-        //check if user has a channel
-        Channel* channel = m_user->currentChannel;
-        if(!channel)
-            break;
-
-        //check has user permission to chat in channel?
-        //code here
-
-
         //do unpack
         auto msg = PacketHelpers::unpack<SendMessagePacket>(packet.payload);
 
@@ -609,45 +625,84 @@ void ClientSession::processPacket(
         if(msg.text.isEmpty() && msg.attachmentId==0)
             break;
 
-        //convert sendMessagePacket to ChatMessagePacket
+        Channel* channel=nullptr;
+        //check is it for text channel type or not?
+        if(msg.targetTextChannelId==0) //it's voice channel user wants to chat
+        {
+            //check if user has a channel
+            channel = m_user->currentChannel;
+            if(!channel)
+                break; //user has no channel
+        }
+        else //lookup text channel
+        {
+            channel = m_server->findChannelById(msg.targetTextChannelId);
+            if(!channel)
+                break; //invalid text channel id
+        }
+
+        //validate attachments and protect them
+        Attachment attachment;
+        if (msg.attachmentId != 0)
+        {
+            attachment = m_server->db()->attachment(msg.attachmentId);
+
+            if (attachment.id == 0)
+                break; // Attachment doesn't exist
+
+            if (attachment.uploaderId != m_user->id)
+                break; // Must belong to the sender
+
+            if (attachment.channelId != channel->id)
+                break; // Must belong to the current channel
+        }
+
+
+        quint64 messageId;
         ChatMessagePacket cm;
+
+        //check has user permission to chat in this text channel?
+        //code here
+
+
+        //save chat if needed
+        if(channel->saveChats)
+        {
+                //save
+                messageId = saveMessage(channel->id, msg);
+                if(messageId==0)
+                    break; //failed to save message in database!
+        }
+        else //saveChat is OFF on voice channel
+        {
+            messageId=0; //this is temporary message so messageId is 0
+        }
+
+
+        //convert sendMessagePacket to ChatMessagePacket
+        cm.messageId = messageId;
         cm.senderId = m_user->id;
         cm.senderName = m_user->username;
         cm.type = msg.type;
-        cm.messageId=-1; //later increase this for each channel messages
+        cm.channelId=channel->id;
         cm.text = msg.text;
         cm.attachmentId = msg.attachmentId;
-
-        //attach check other dont use this id easily
-        // Attachment attachment;
-        // if (msg.attachmentId != 0)
-        // {
-        //     if (!m_server->db()->findAttachment(msg.attachmentId, attachment))
-        //         break;
-
-        //     if (attachment.uploaderId != m_user->id)
-        //         break;
-
-        //     if (attachment.channelId != channel->id)
-        //         break;
-        // }
 
         qDebug() << "message received:"
                  << " text:" << msg.text
                  << " type:" << msg.type
                  << " attachmentId:" << msg.attachmentId;
 
-        //save message if needed
-        if(channel->saveChats)
+        if(channel->type == ChannelType::Type::Text)
         {
-            qDebug() << "save message for channel";
-            // m_server->saveMessage(
-            //     channel->id,
-            //     m_user->id,
-            //     msg.text);
+            //TODO
+            //later check if user has permission for that send him message. (dont send to all or channel) otherwise send to everyone for public text channels
+            sendToEveryone(PacketType::ChatMessage,  PacketHelpers::pack(cm));
         }
+        else //its voice channel
+            sendToChannel(PacketType::ChatMessage, PacketHelpers::pack(cm));
 
-        sendToChannel(PacketType::ChatMessage, PacketHelpers::pack(cm));
+
         break;
     }
 
@@ -824,14 +879,31 @@ void ClientSession::processPacket(
             break;
         }
 
-        Channel *channel = m_user->currentChannel;
-        if (!channel)
+        Channel* channel;
+        if(req.channelId==0) //user is sending on his voice channel
         {
-            response.error = "No channel.";
-            sendToSender(PacketType::UploadFileBeginResponse,
-                         PacketHelpers::pack(response));
-            break;
+            channel = m_user->currentChannel;
+            if (!channel)
+            {
+                response.error = "You are not in a voice channel.";
+                sendToSender(PacketType::UploadFileBeginResponse,
+                             PacketHelpers::pack(response));
+                break;
+            }
         }
+        else //user sending on text channel
+        {
+            channel = m_server->findChannelById(req.channelId);
+            if(!channel)
+            {
+                response.error = "text channel not found.";
+                sendToSender(PacketType::UploadFileBeginResponse,
+                             PacketHelpers::pack(response));
+                break;
+            }
+        }
+
+        //TODO: check that user has right access to send file into this channel?
 
 
 
@@ -1150,7 +1222,14 @@ void ClientSession::processPacket(
             break;
         }
 
-        if (m_user->currentChannel != channel && !m_user->isAdmin)
+        //check if channel type is TEXT and has right acess
+        if(channel->type  == ChannelType::Type::Text)
+        {
+            //check thi user has right access for this text channel to  see content OR is admin? allow him download otherwise access denied
+            //TODO
+        }
+        //check if user's asking for download other channel's attachment AND he isn't admin -> no access
+        else if (m_user->currentChannel != channel && !m_user->isAdmin)
         {
             begin.error = "Access denied.";
 
@@ -1227,6 +1306,29 @@ void ClientSession::processPacket(
     }
 }
 
+quint64 ClientSession::saveMessage(quint64 channelId ,const SendMessagePacket& msg)
+{
+    // Build database message
+    Message message;
+    message.channelId = channelId;
+    message.senderId = m_user->id;
+    message.type = msg.type;
+    message.text = msg.text;
+    message.attachmentId = msg.attachmentId;
+    message.edited = false;
+    message.deleted = false;
+    message.createdAt = QDateTime::currentDateTimeUtc();
+    message.updatedAt = message.createdAt;
+
+    // Save it
+    quint64 messageId = m_server->db()->createMessage(message);
+    if (messageId == 0)
+    {
+        qWarning() << "Failed to save message.";
+    }
+
+    return messageId;
+}
 
 void ClientSession::forceDisconnect(bool connectionLost)
 {

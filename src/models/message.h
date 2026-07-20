@@ -2,6 +2,8 @@
 
 #include <QString>
 #include <QDateTime>
+#include <protocol/commonTypes.h>
+#include <protocol/packets/MessagePackets.h>
 
 struct Message
 {
@@ -10,7 +12,7 @@ struct Message
     quint64 channelId = 0;
     quint64 senderId = 0;
 
-    int type = 0;
+    BeanChatCommon::Msg::Type type;
 
     QString text;
 
@@ -21,4 +23,23 @@ struct Message
 
     QDateTime createdAt;
     QDateTime updatedAt;
+
+
+    static BeanChatCommon::ChatMessagePacket toPacket(const Message &msg,
+                               const QString &senderName)
+    {
+        BeanChatCommon::ChatMessagePacket p;
+
+        p.messageId   = msg.id;
+        p.senderId    = msg.senderId;
+        p.senderName  = senderName;
+        p.channelId   = msg.channelId;
+        p.attachmentId= msg.attachmentId;
+        p.timestamp   = msg.createdAt;
+
+        p.text = msg.text;
+        p.type = msg.type;
+
+        return p;
+    }
 };
