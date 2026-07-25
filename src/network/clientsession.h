@@ -24,6 +24,9 @@ using namespace BeanChatCommon;
 #include <QVersionNumber>
 #include <QCryptographicHash>
 
+#include <QLocale>
+
+
 class Server;
 class UserModel;
 

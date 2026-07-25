@@ -177,10 +177,6 @@ void ClientSession::handleLoginProof(const QByteArray& payload)
     QString errorMessage;
     m_user = m_server->loginUser(m_pendingLogin,m_socket,errorMessage);
 
-    //clear.
-    m_pendingLogin = {};
-    m_pendingChallenge.clear();
-
     if(!m_user)
     {
         qDebug() << "faild to loginUser. server returnes null user";
@@ -225,8 +221,49 @@ void ClientSession::handleLoginProof(const QByteArray& payload)
     uc.buildType = m_user->buildType;
     uc.osName = m_user->osName;
     uc.osVersion = m_user->osVersion;
+
     qDebug() << "user connected and reported his system info: " <<  uc.appVersion << "-" << uc.buildType << "-" << uc.osName << "-" << uc.osVersion;
     sendToEveryone(PacketType::UserConnected, PacketHelpers::pack(uc));
+
+
+    //store rejoin info
+    quint64 joinChannelId=0;
+    QString joinChannelPassword="";
+    if(m_pendingLogin.joinChannelId>0)
+    {
+        joinChannelId=m_pendingLogin.joinChannelId;
+        joinChannelPassword=m_pendingLogin.joinChannelPassword;
+    }
+
+    // make sure clear pending login stuff.
+    m_pendingLogin = {};
+    m_pendingChallenge.clear();
+
+    //if user was connection lost, and had a previous voice channel so he wants to re-join
+
+    if(joinChannelId>0)
+    {
+        qDebug() <<"re joining user to previous channel.";
+        ChatMessageChunkPacket savedMessageChunk;
+        QByteArray channelResponse = m_server->joinChannel(m_user, joinChannelId, joinChannelPassword, savedMessageChunk);
+        if(channelResponse.isEmpty())
+        {
+            qDebug() << "notify user, channel not found or password is incorrect";
+            return;
+        }
+
+        sendToEveryone(PacketType::UserJoinedChannel, channelResponse);
+
+        //check if there is saved message send to client
+        if(!savedMessageChunk.messages.isEmpty())
+        {
+            //send saved message chunk:
+            sendToSender(PacketType::ChatMessageChunk, PacketHelpers::pack(savedMessageChunk));
+        }
+
+        m_server->printChannelWithUsersIn();
+    }
+
 }
 
 void ClientSession::handleLogin(const QByteArray& payload)
@@ -938,7 +975,7 @@ void ClientSession::processPacket(
         if (req.fileSize > ProtocolLimits::MaxAttachmentSize)
         {
             response.error = "File is too large, max size="+
-                             QString::number(BeanChatCommon::ProtocolLimits::MaxAttachmentSize);
+                             QLocale().formattedDataSize(static_cast<qint64>(BeanChatCommon::ProtocolLimits::MaxAttachmentSize));
 
             sendToSender(
                 PacketType::UploadFileBeginResponse,
