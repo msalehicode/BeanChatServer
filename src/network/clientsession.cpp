@@ -702,6 +702,13 @@ void ClientSession::processPacket(
         //code here
 
 
+        //music commands
+        if (m_server->handleMusicCommand(m_user, msg.text))
+        {
+            qDebug() << " music command received. ";
+            // break;
+        }
+
         //save chat if needed
         if(channel->saveChats)
         {

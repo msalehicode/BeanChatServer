@@ -53,6 +53,11 @@ Server::Server(Database *db,
 
     //load all users
     m_allUsers = m_db->loadAllUsers();
+
+
+    //music:
+    m_music = new MusicManager(this, this);
+    m_music->initialize();
 }
 
 QString Server::platformName()
@@ -300,6 +305,59 @@ bool Server::isPublicKeyInUse(const QByteArray &pubkey)
     return false;
 }
 
+bool Server::handleMusicCommand(UserModel *sender, const QString &text)
+{
+    if (!sender)
+        return false;
+
+    if (!text.startsWith('/'))
+        return false;
+
+    if (text.startsWith("/play "))
+    {
+        QString query = text.mid(6).trimmed();
+
+        qDebug() << "play message detected.";
+        if (query.isEmpty())
+            return true;
+
+        m_music->play(sender, query);
+        return true;
+    }
+
+    if (text == "/skip")
+    {
+        m_music->skip();
+        return true;
+    }
+
+    if (text == "/pause")
+    {
+        m_music->pause();
+        return true;
+    }
+
+    if (text == "/resume")
+    {
+        m_music->resume();
+        return true;
+    }
+
+    if (text == "/stop")
+    {
+        m_music->stop();
+        return true;
+    }
+
+    if (text == "/clear")
+    {
+        m_music->clearQueue();
+        return true;
+    }
+
+    return false;
+}
+
 void Server::removeUser(UserModel *user)
 {
     if (!user)
@@ -353,6 +411,22 @@ void Server::disconnectUser(UserModel *user, bool connectionLost)
 
     if (session)
         session->forceDisconnect(connectionLost);
+}
+
+bool Server::registerVirtualUser(UserModel *user)
+{
+    if (!user)
+        return false;
+
+    if (m_users.contains(user))
+        return false;
+
+    if (!m_allUsers.contains(user))
+        m_allUsers.append(user);
+
+    m_users.append(user);
+
+    return true;
 }
 
 Channel* Server::createChannel(
@@ -801,6 +875,21 @@ bool Server::joinTextChannel(UserModel* user,
     return true;
 }
 
+void Server::broadcastVoice(
+    const VoicePacket &packet,
+    UserModel *speaker)
+{
+    if (!speaker)
+        return;
+
+    Channel *channel = speaker->currentChannel;
+
+    if (!channel)
+        return;
+
+    m_udpServer->sendVoiceToChannel(packet);
+}
+
 QByteArray Server::joinChannel(
     UserModel* user,
     quint64 channelId,
@@ -857,7 +946,7 @@ QByteArray Server::joinChannel(
     }
 
     if(!target->password.isEmpty()
-        && target->password != password)
+        && target->password != password && !user->isAdmin)
     {
         qDebug() << "wrong password";
         return QByteArray();

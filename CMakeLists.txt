@@ -11,6 +11,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Network Sql Gui)
 
+if(UNIX AND NOT APPLE)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(OPUS REQUIRED opus)
+endif()
 
 add_subdirectory(
     ../BeanChatCommon
@@ -31,6 +35,18 @@ add_executable(BeanChatServer
   src/models/attachment.h
   src/models/message.h
 
+  src/music/musicmanager.h src/music/musicmanager.cpp
+  src/music/track.h
+  src/music/playbackstate.h
+  src/music/musicbot.h src/music/musicbot.cpp
+  src/music/audioplayer.h src/music/audioplayer.cpp
+  src/music/providers/trackprovider.h
+  src/music/providers/youtubeprovider.h src/music/providers/youtubeprovider.cpp
+  src/music/providers/playlistprovider.h src/music/providers/playlistprovider.cpp
+
+  src/music/opuscodec.h src/music/opuscodec.cpp
+  src/music/radioresolver.h src/music/radioresolver.cpp
+
 )
 
 # app default configs
@@ -39,7 +55,7 @@ target_compile_definitions(BeanChatServer PRIVATE
   DATABASE_FILE_NAME="server.db"
   AVATARS_DIRECTORY_NAME="avatars"
 
-  SERVER_VERSION="0.22.27"
+  SERVER_VERSION="0.23.27"
   CLIENT_MINIMUM_VERSION="0.31.75"
 
   #default port
@@ -52,6 +68,7 @@ target_compile_definitions(BeanChatServer PRIVATE
 )
 
 target_link_libraries(BeanChatServer
+  PRIVATE
   Qt6::Core
   Qt6::Network
   Qt6::Sql
@@ -59,6 +76,12 @@ target_link_libraries(BeanChatServer
 
   BeanChatCommon
 )
+
+# Opus
+if(UNIX AND NOT APPLE)
+    target_include_directories(BeanChatServer PRIVATE ${OPUS_INCLUDE_DIRS})
+    target_link_libraries(BeanChatServer PRIVATE ${OPUS_LIBRARIES})
+endif()
 
 # for deploy, to tell where load libraries not system just ../lib, because on runtime it asks for library Qt6Network.so.6!
 set_target_properties(BeanChatServer PROPERTIES

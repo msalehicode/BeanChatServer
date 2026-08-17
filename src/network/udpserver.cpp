@@ -245,6 +245,56 @@ void UdpServer::calculatePacketLoss(quint32 packetSequence, PacketLossStats &sta
     stats.windowReceived++;
 }
 
+void UdpServer::sendVoiceToChannel(const VoicePacket &packet)
+{
+    auto sender = findUser(packet.senderId);
+
+    if(!sender)
+    {
+        // qDebug() << "Voice sender not found";
+        return;
+    }
+
+    if(!sender->currentChannel)
+    {
+        // qDebug() << "Sender has no channel";
+        return;
+    }
+
+
+    auto channel =
+        sender->currentChannel;
+
+    if(!channel)
+        return;
+
+
+    QByteArray outData;
+
+    QDataStream out(
+        &outData,
+        QIODevice::WriteOnly);
+
+    out << PacketType::UdpVoiceData;
+    out << packet;
+
+    for(auto user : channel->users)
+    {
+        if(user == sender)
+            continue;
+
+        if(!user->udpRegistered)
+            continue;
+
+        // qint64 bytes =
+        m_socket.writeDatagram(
+                outData,
+                user->udpAddress,
+                user->udpPort);
+
+    }
+}
+
 UserModel* UdpServer::findUser(
     quint64 userId)
 {

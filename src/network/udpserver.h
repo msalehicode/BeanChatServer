@@ -35,6 +35,8 @@ public:
     void updatePacketLoss();
     void calculateUpdatePacketLoss(PacketLossStats& stats);
     void calculatePacketLoss(quint32 packetSequence, PacketLossStats& stats);
+
+    void sendVoiceToChannel(const VoicePacket &packet);
 private slots:
     void onReadyRead();
 

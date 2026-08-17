@@ -46,6 +46,12 @@ using namespace BeanChatCommon;
 #include <QBuffer>
 
 
+
+//musicbot:
+#include "../music/musicmanager.h"
+
+
+
 class ClientSession;
 
 class Server : public QObject
@@ -76,6 +82,8 @@ public:
 
     void removeSession(QTcpSocket *socket);
     void disconnectUser(UserModel *user, bool connectionLost=false);
+
+    bool registerVirtualUser(UserModel *user);
 
     Channel* createChannel(
         const QString& name,
@@ -120,7 +128,9 @@ public:
     UserModel *findUser(quint64 userId); //among connected Users not all users!!!!
     bool isPublicKeyInUse(const QByteArray &pubkey);
 
-
+    //music
+    bool handleMusicCommand(UserModel *sender,
+                            const QString &text);
 
     //avatar
     QString generateAvatarHash(const QByteArray& avatarData); // usage:QString hash = generateAvatarHash(imageBytes);
@@ -143,6 +153,11 @@ public:
 
     QString uploadsDirectory() const;
     bool joinTextChannel(UserModel *user, quint64 channelId, const QString &password, BeanChatCommon::ChatMessageChunkPacket &chunkResult);
+
+
+    //for music bot
+    void broadcastVoice(const VoicePacket &packet, UserModel *speaker);
+
 private slots:
     void onNewConnection();
 
@@ -167,6 +182,8 @@ private:
     QList<UserModel*> m_allUsers;  // all registered users
 
     QList<Channel*> m_channels;
+
+    MusicManager *m_music = nullptr;
 
     UdpServer* m_udpServer;
 };
