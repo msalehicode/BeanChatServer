@@ -2,6 +2,7 @@
 
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
 #include <QDebug>
 
 YoutubeProvider::YoutubeProvider(QObject *parent)
@@ -11,73 +12,31 @@ YoutubeProvider::YoutubeProvider(QObject *parent)
 
 void YoutubeProvider::search(const QString &query)
 {
-    Q_UNUSED(query);
+    if (m_process.state() != QProcess::NotRunning)
+        m_process.kill();
 
+    m_query = query;
     m_track = Track();
 
-    m_track.originalUrl =
-        "https://www.youtube.com/watch?v=YQHsXMglC9A";
+    disconnect(&m_process, nullptr, this, nullptr);
 
-    requestStreamUrl();
+    connect(&m_process,
+            qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
+            this,
+            &YoutubeProvider::onSearchFinished);
+
+    QStringList args;
+
+    args
+        << "--no-warnings"
+        << "--dump-single-json"
+        << "--no-playlist"
+        << QString("ytsearch1:%1").arg(query);
+
+    qDebug() << "YouTube search:" << query;
+
+    m_process.start("/usr/local/bin/yt-dlp", args);
 }
-
-// void YoutubeProvider::search(const QString &query)
-// {
-//     if (m_process.state() != QProcess::NotRunning)
-//         m_process.kill();
-
-//     m_query = query;
-//     m_track = Track();
-
-//     disconnect(&m_process, nullptr, this, nullptr);
-
-//     connect(&m_process,
-//             qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
-//             this,
-//             &YoutubeProvider::onSearchFinished);
-
-
-//     QStringList args;
-
-
-
-
-//     // args
-//     //     << "--proxy"
-//     //     << "http://169.254.1.1:8080"
-//     //     << "--cookies"
-//     //     << "/home/mrx/.config/beanchat/youtube_cookies.txt"
-//     //     << "--js-runtimes"
-//     //     << "node"
-//     //     << "--no-warnings"
-//     //     << "--dump-single-json"
-//     //     << "--no-playlist"
-//     //     << QString("ytsearch1:%1").arg(query);
-
-//     args
-//         << "--proxy"
-//         << "http://169.254.1.1:8080"
-//         << "--cookies-from-browser"
-//         << "chromium:/home/mrx/snap/chromium/common/chromium"
-//         << "--js-runtimes"
-//         << "node"
-//         << "--no-warnings"
-//         << "--dump-single-json"
-//         << "--no-playlist"
-//         << QString("ytsearch1:%1").arg(query);
-//     //apply proxy
-//     // QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-//     // env.insert("http_proxy", "http://169.254.1.1:8080");
-//     // env.insert("https_proxy", "http://169.254.1.1:8080");
-//     // m_process.setProcessEnvironment(env);
-
-
-//     // m_process.start("yt-dlp", args);
-//     m_process.start("/usr/local/bin/yt-dlp", args);
-// }
-
-
-
 
 void YoutubeProvider::onSearchFinished(
     int exitCode,
@@ -97,18 +56,19 @@ void YoutubeProvider::onSearchFinished(
 
     QJsonParseError err;
 
-    auto doc =
+    QJsonDocument doc =
         QJsonDocument::fromJson(json, &err);
 
     if (err.error != QJsonParseError::NoError)
     {
-        emit errorOccurred(err.errorString());
+        emit errorOccurred(
+            "YouTube search JSON error: " +
+            err.errorString());
 
         return;
     }
 
-    auto obj =
-        doc.object();
+    QJsonObject obj = doc.object();
 
     m_track.title =
         obj["title"].toString();
@@ -128,10 +88,20 @@ void YoutubeProvider::onSearchFinished(
     m_track.live =
         obj["is_live"].toBool();
 
+    if (m_track.originalUrl.isEmpty())
+    {
+        emit errorOccurred(
+            "YouTube search returned no URL.");
+
+        return;
+    }
+
+    qDebug() << "YouTube result:";
+    qDebug() << "Title:" << m_track.title;
+    qDebug() << "URL:" << m_track.originalUrl;
+
     requestStreamUrl();
 }
-
-
 
 void YoutubeProvider::requestStreamUrl()
 {
@@ -144,80 +114,19 @@ void YoutubeProvider::requestStreamUrl()
 
     QStringList args;
 
-    // args
-    //     << "--proxy"
-    //     << "http://169.254.1.1:8080"
-    //     << "--cookies-from-browser"
-    //     << "chromium:/home/mrx/snap/chromium/common/chromium"
-    //     << "--js-runtimes"
-    //     << "node"
-    //     << "--no-warnings"
-    //     << "-f"
-    //     << "bestaudio/best"
-    //     << "--get-url"
-    //     << m_track.originalUrl;
-
     args
-        << "--proxy"
-        << "http://169.254.1.1:8080"
-        << "--cookies-from-browser"
-        << "chromium:/home/mrx/snap/chromium/common/chromium"
-        << "--js-runtimes"
-        << "node"
         << "--no-warnings"
+        << "--extractor-args"
+        << "youtube:player_client=web_embedded"
         << "-f"
         << "bestaudio/best"
         << "--get-url"
         << m_track.originalUrl;
 
+    qDebug() << "Resolving YouTube audio URL...";
+
     m_process.start("/usr/local/bin/yt-dlp", args);
 }
-// void YoutubeProvider::requestStreamUrl()
-// {
-//     disconnect(&m_process, nullptr, this, nullptr);
-
-//     connect(&m_process,
-//             qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
-//             this,
-//             &YoutubeProvider::onGetUrlFinished);
-
-//     QStringList args;
-
-//     // args
-//     //     << "--proxy"
-//     //     << "http://169.254.1.1:8080"
-//     //     << "--cookies"
-//     //     << "/home/mrx/.config/beanchat/youtube_cookies.txt"
-//     //     << "--js-runtimes"
-//     //     << "node"
-//     //     << "--no-warnings"
-//     //     << "-f"
-//     //     << "ba"
-//     //     << "--get-url"
-//     //     << m_track.originalUrl;
-
-//     args
-//         << "--proxy"
-//         << "http://169.254.1.1:8080"
-//         << "--cookies-from-browser"
-//         << "firefox"
-//         << "--js-runtimes"
-//         << "node"
-//         << "--no-warnings"
-//         << "-f"
-//         << "ba"
-//         << "--get-url"
-//         << m_track.originalUrl;
-
-//     // QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-//     // env.insert("http_proxy", "http://169.254.1.1:8080");
-//     // env.insert("https_proxy", "http://169.254.1.1:8080");
-//     // m_process.setProcessEnvironment(env);
-
-//     // m_process.start("yt-dlp", args);
-//     m_process.start("/usr/local/bin/yt-dlp", args);
-// }
-
 
 void YoutubeProvider::onGetUrlFinished(
     int exitCode,
@@ -236,13 +145,23 @@ void YoutubeProvider::onGetUrlFinished(
         QString::fromUtf8(
             m_process.readAllStandardOutput()).trimmed();
 
-    if (!m_track.isValid())
+    if (m_track.streamUrl.isEmpty())
     {
         emit errorOccurred(
-            "Unable to obtain stream url.");
+            "yt-dlp returned an empty stream URL.");
 
         return;
     }
+
+    if (!m_track.isValid())
+    {
+        emit errorOccurred(
+            "Unable to obtain valid YouTube track.");
+
+        return;
+    }
+
+    qDebug() << "YouTube stream URL obtained.";
 
     emit trackReady(m_track);
 }

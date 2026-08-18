@@ -32,10 +32,13 @@ MusicManager::MusicManager(Server *server,
             {
                 m_queue.enqueue(track);
 
-
-                qDebug() << "Track:"
-                         << track.title
-                         << track.streamUrl;
+                qDebug() << "========== TRACK READY ==========";
+                qDebug() << "Title:" << track.title;
+                qDebug() << "Uploader:" << track.uploader;
+                qDebug() << "Duration:" << track.duration;
+                qDebug() << "Original:" << track.originalUrl;
+                qDebug() << "Stream URL exists:"
+                         << !track.streamUrl.isEmpty();
 
 
                 if (!m_playing)
@@ -113,7 +116,7 @@ bool MusicManager::play(UserModel *sender,
     else
     {
         qWarning() << "Could not resolve radio URL:" << query << "lets search youtube";
-        // m_youtube->search(query);
+        m_youtube->search(query);
     }
 
 
