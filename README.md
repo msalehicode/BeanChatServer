@@ -30,6 +30,47 @@ sudo apt install -y \
     libopengl0
 ```
 
+For music bot to play from (Online Radio, Youtube):
+```bash
+sudo apt install libopus0
+sudo apt install ffmpeg
+sudo apt install -y ffmpeg python3 python3-pip
+python3 -m pip install -U yt-dlp --break-system-packages
+pip install -U "yt-dlp[default]" --break-system-packages
+curl -fsSL https://deno.land/install.sh | sh
+source ~/.bashrc
+```
+
+check installation:
+```bash
+ffmpeg -version
+yt-dlp --version
+deno --version
+```
+
+
+confirm setup music bot requires are fine:
+for download from youtube:
+> yt-dlp -vU   --extractor-args "youtube:player_client=web_embedded"   -f "bestaudio/best"   "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+
+for search on youtube:
+> yt-dlp --print "%(title)s | %(id)s | %(webpage_url)s" "ytsearch1:Adele Hello"
+
+
+> [!NOTE]
+> If running services with other users than root and installed requires via root so you need to do give access to deno for that other user:
+
+check does 'deno' is accessable for that target user: (bc1 is our user)
+> sudo -u bc1 which deno
+
+to give access/copy deno for other users:
+```bash
+sudo cp /root/.deno/bin/deno /usr/local/bin/deno
+sudo chmod 755 /usr/local/bin/deno
+```
+
+
 Install UFW (firewall) if it is not already installed:
 
 ```bash
@@ -48,7 +89,7 @@ sudo ufw allow 20/tcp
 
 > [!WARNING]
 > please make sure open your ssh's port in ufw firewall
-> 
+>
 > by default it's 20/tcp if it's differ replace 20 with your ssh your port
 
 Verify the firewall rules:
