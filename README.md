@@ -34,6 +34,7 @@ For music bot to play from (Online Radio, Youtube):
 ```bash
 sudo apt install libopus0
 sudo apt install ffmpeg
+sudo apt install zip
 sudo apt install -y ffmpeg python3 python3-pip
 python3 -m pip install -U yt-dlp --break-system-packages
 pip install -U "yt-dlp[default]" --break-system-packages
