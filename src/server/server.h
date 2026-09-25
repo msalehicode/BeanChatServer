@@ -154,10 +154,14 @@ public:
     QString uploadsDirectory() const;
     bool joinTextChannel(UserModel *user, quint64 channelId, const QString &password, BeanChatCommon::ChatMessageChunkPacket &chunkResult);
 
+    //privilege token
+    bool validatePrivilegeToken(UserModel* user, QString token);
 
     //for music bot
     void broadcastVoice(const VoicePacket &packet, UserModel *speaker);
 
+
+    QString updateServerAvatarOrBanner(const QByteArray &data, bool forBanner);
 private slots:
     void onNewConnection();
 

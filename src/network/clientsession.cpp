@@ -65,6 +65,50 @@ void ClientSession::sendToEveryone(
     }
 }
 
+void ClientSession::sendToAdmins(
+    PacketType type,
+    const QByteArray &payload)
+{
+    Packet packet;
+    packet.type = type;
+    packet.payload = payload;
+
+    m_server->lastTcpActivity.restart(); //keep track of when was last time we sent something to everyone.
+
+    QByteArray bytes = packet.serialize();
+
+    for (UserModel *user : m_server->users())
+    {
+        if(!user->isAdmin)
+            continue;
+
+        if (user->socket)
+            user->socket->write(bytes);
+    }
+}
+
+void ClientSession::sendToNormalUsers(
+    PacketType type,
+    const QByteArray &payload)
+{
+    Packet packet;
+    packet.type = type;
+    packet.payload = payload;
+
+    m_server->lastTcpActivity.restart(); //keep track of when was last time we sent something to everyone.
+
+    QByteArray bytes = packet.serialize();
+
+    for (UserModel *user : m_server->users())
+    {
+        if(user->isAdmin)
+            continue;
+
+        if (user->socket)
+            user->socket->write(bytes);
+    }
+}
+
 void ClientSession::sendToEveryoneExceptSender(
     PacketType type,
     const QByteArray &payload)
@@ -399,6 +443,90 @@ void ClientSession::processPacket(
             break;
 
         sendToSender(PacketType::ServerState, m_server->buildServerState());
+        break;
+    }
+    case PacketType::RequestRedeemPrivilegeToken:
+    {
+        //check for user logged in?
+        if(!m_user)
+            break;
+
+        auto req = PacketHelpers::unpack<RedeemPrivilegeTokenPacket>(packet.payload);
+        qDebug() << "redeem privilege token = " << req.token;
+
+        RedeemPrivilegeTokenPacket rpt;
+
+        if(m_server->validatePrivilegeToken(m_user,req.token))
+        {
+            rpt.result=true;
+            rpt.resultMessage="privilege token accepted.";
+            rpt.userId = m_user->id;
+            rpt.token="";
+
+            //tell everyone that user became admin
+            sendToEveryone(PacketType::ResponseRedeemPrivilegeToken, PacketHelpers::pack(rpt));
+        }
+        else
+        {
+            rpt.result=false;
+            rpt.resultMessage="privilege token rejected.";
+            rpt.token="";
+            sendToSender(PacketType::ResponseRedeemPrivilegeToken, PacketHelpers::pack(rpt));
+        }
+        break;
+    }
+    case PacketType::RequestGetServerSettings:
+    {
+        //check for user logged in?
+        if(!m_user)
+            break;
+
+        //have user access to get server settings?!
+        if(!m_user->isAdmin)
+            break;
+
+        qDebug() << "sending server settings to user.";
+        ServerInfo lastServerInfo = *m_server->info(); //send raw settings
+        sendToSender( PacketType::ResponseGetServerSettings,PacketHelpers::pack(lastServerInfo));
+        break;
+    }
+    case PacketType::RequestUpdateServerSettings:
+    {
+        //check for user logged in?
+        if(!m_user)
+            break;
+
+        //have user access to update server settings?!
+        if(!m_user->isAdmin)
+            break;
+
+        auto req = PacketHelpers::unpack<UpdateServerSettingsPacket>(packet.payload);
+
+        //check values (VALIDATE)
+        //CODE LATER
+
+        //apply to things like if voice quality changed have to restart musicBot opus and init with new bitrate.
+        //CODE LATER
+
+
+        //NOT ALLOWED ITEMS:
+        req.serverInfo.version = m_server->info()->version;
+        req.serverInfo.startTime = m_server->info()->startTime;
+        req.serverInfo.avatarHash= m_server->info()->avatarHash;
+        req.serverInfo.bannerHash = m_server->info()->bannerHash;
+
+        *m_server->info() = req.serverInfo;
+
+        UpdateServerSettingsPacket uss;
+
+        //if user is admin send raw settings
+        uss.serverInfo = req.serverInfo;
+        sendToAdmins(PacketType::ServerSettingsUpdated,PacketHelpers::pack(uss));
+
+        //if its normal user send him filetered except admins
+        uss.serverInfo = ServerInfo::convertDataForNormalUser(req.serverInfo); //send filetered settings to protect some data.
+        sendToNormalUsers(PacketType::ServerSettingsUpdated,PacketHelpers::pack(uss));
+
         break;
     }
     case PacketType::UserCameraClosed:
@@ -777,11 +905,27 @@ void ClientSession::processPacket(
                 temp.userId=BeanChatCommon::ReservedIds::ServerAvatar;
                 temp.avatarHash=serverInfo->avatarHash;
                 temp.imageData = m_server->imageFileToBytes(m_server->avatarDirectoryName+"/"+serverInfo->avatarHash+".png");
-                if(!m_server->isAvatarHashUsedByAnotherUser(serverInfo->oldAvatarHash))
-                {
-                    temp.oldHash= serverInfo->oldAvatarHash; //to tell users delete this old avatar.
-                }
+                // if(!m_server->isAvatarHashUsedByAnotherUser(serverInfo->oldAvatarHash))
+                // {
+                    // temp.oldHash= serverInfo->oldAvatarHash; //to tell users delete this old avatar.
+                // }
                 qDebug() << "user asked servers avatar. filled fine :)";
+                ra.avatars.append(temp);
+            }
+        }
+        else if(p.notFoundIds.contains(BeanChatCommon::ReservedIds::ServerBanner))
+        {
+            ServerInfo* serverInfo = m_server->info();
+            if(serverInfo)
+            {
+                temp.userId=BeanChatCommon::ReservedIds::ServerBanner;
+                temp.avatarHash=serverInfo->bannerHash;
+                temp.imageData = m_server->imageFileToBytes(m_server->avatarDirectoryName+"/"+serverInfo->bannerHash+".png");
+                // if(!m_server->isAvatarHashUsedByAnotherUser(serverInfo->oldAvatarHash))
+                // {
+                // temp.oldHash= serverInfo->oldAvatarHash; //to tell users delete this old avatar.
+                // }
+                qDebug() << "user asked servers banner. filled fine :)";
                 ra.avatars.append(temp);
             }
         }
@@ -857,30 +1001,73 @@ void ClientSession::processPacket(
                     return;
                 }
 
-                //try to make picture rounded, its better do.
-                if (!m_server->makeAvatarRounded(p.paylaodData))
-                    qWarning() << "Failed to round avatar.";
-                else
-                    qDebug() << "avatar image rounded.";
+                if(p.targetId==BeanChatCommon::ReservedIds::ServerAvatar || p.targetId==BeanChatCommon::ReservedIds::ServerBanner)
+                {
+                    if(!m_user->isAdmin)
+                    {
+                        qDebug() << "normal user cant update server's avatar/banner! request rejected.";
+                        return;
+                    }
+                }
+
+                if(p.targetId!=BeanChatCommon::ReservedIds::ServerBanner) //dont round if its for server's banner
+                {
+                    //try to make picture rounded, its better do.
+                    if (!m_server->makeAvatarRounded(p.paylaodData))
+                        qWarning() << "Failed to round avatar.";
+                    else
+                        qDebug() << "avatar image rounded.";
+                }
+
 
                 QString oldHash = m_user->avatarHash;//to store old hash value WHEN it isn't  used by more than one user, to tell users delete this old one from cached files
                 bool removeOldAvatar=false;
-                QString hashResult = m_server->updateUserAvatar(m_user,p.paylaodData,removeOldAvatar);
+
+
+                //check if its for normal user or it's for server's avatar/banner
+                QString hashResult;
+                if(p.targetId==BeanChatCommon::ReservedIds::ServerAvatar)
+                    hashResult = m_server->updateServerAvatarOrBanner(p.paylaodData,false); //false-> for server's avatar
+                else if(p.targetId==BeanChatCommon::ReservedIds::ServerBanner)
+                    hashResult = m_server->updateServerAvatarOrBanner(p.paylaodData,true);//true -> for server's banner
+                else
+                    hashResult = m_server->updateUserAvatar(m_user,p.paylaodData,removeOldAvatar);
+
+
                 //check is generated hash is valid?
                 if(!hashResult.isEmpty())
                 {
-                    //notify everyone a user avatar updated.
-                    UserInfoChangedPacket ui;
-                    ui.userId = m_user->id;
-                    ui.payloadValue = hashResult;
-                    ui.updateType = UpdateUserInfoType::Avatar;
-                    ui.payloadData = p.paylaodData;
+                    //if target is server's avatar/banner.
+                    if(p.targetId==BeanChatCommon::ReservedIds::ServerAvatar || p.targetId==BeanChatCommon::ReservedIds::ServerBanner)
+                    {
+                        ServerSettingsUpdatedPacket ssu;
 
-                    if(removeOldAvatar)
-                        ui.payloadSecondValue = oldHash; //to tell users remove old file due to privacy and less cache size on local files
+                        //notify for admins
+                        qDebug() << "notify admins, server's avatar/banner updated.";
+                        ssu.serverInfo = *m_server->info();
+                        sendToAdmins(PacketType::ServerSettingsUpdated, PacketHelpers::pack(ssu));
 
-                    sendToEveryone(PacketType::UserInfoChanged, PacketHelpers::pack(ui));
-                    qDebug() << "notify everyone, user's avatar updated.";
+                        //notify normal users
+                        qDebug() << "notify normal users, server's avatar/banner updated.";
+                        ssu.serverInfo = ServerInfo::convertDataForNormalUser(*m_server->info());
+                        sendToNormalUsers(PacketType::ServerSettingsUpdated,PacketHelpers::pack(ssu));
+                    }
+                    else
+                    {
+                        //notify everyone a user avatar updated.
+                        UserInfoChangedPacket ui;
+                        ui.userId = m_user->id;
+                        ui.payloadValue = hashResult;
+                        ui.updateType = UpdateUserInfoType::Avatar;
+                        ui.payloadData = p.paylaodData;
+
+                        if(removeOldAvatar)
+                            ui.payloadSecondValue = oldHash; //to tell users remove old file due to privacy and less cache size on local files
+
+                        sendToEveryone(PacketType::UserInfoChanged, PacketHelpers::pack(ui));
+                        qDebug() << "notify everyone, user's avatar updated.";
+                    }
+
                 }
                 break;
             }

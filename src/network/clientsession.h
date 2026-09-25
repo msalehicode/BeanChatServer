@@ -54,6 +54,8 @@ public:
 
     QString formatRemainingTime(qint64 seconds);
     quint64 saveMessage(quint64 channelId, const SendMessagePacket &msg);
+    void sendToNormalUsers(PacketType type, const QByteArray &payload);
+    void sendToAdmins(PacketType type, const QByteArray &payload);
 private slots:
     void onReadyRead();
     void onDisconnected();

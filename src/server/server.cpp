@@ -46,10 +46,31 @@ Server::Server(Database *db,
     m_info.name="BeanChat Server";
     m_info.website="https://example.com";
     m_info.avatarHash="782f57381bb2e4678376cdd49dfe7afc6e3f6041689803af8fdd5bf7bdc9542d";
-    m_info.startTime=QDateTime::currentDateTimeUtc();
+    m_info.bannerHash="";
+    m_info.themeColor="#FFFFFF";
+
     m_info.showOfflineUsers=true;
     m_info.maxUsers=32;
+    m_info.voiceQualityIndex=0;
+    m_info.reportToServerListStatus=false;
+    m_info.reservedSlots=1;
 
+    m_info.totalStorageSpace=1024;//MB
+    m_info.maxUploadSizePerFile=24;//MB
+
+    m_info.musicBotStatus=true;
+    m_info.musicBotProxyURL="";
+    m_info.musicBotProxyUser="";
+    m_info.musicBotProxyPass="";
+
+    m_info.sendWelcomeMessagesToChannel=-1;
+    m_info.sendEventLogsToChannel=-1;
+
+
+    m_info.serverPasswordStatus=false;
+    m_info.serverPassword="";
+
+    m_info.startTime=QDateTime::currentDateTimeUtc();
 
     //load all users
     m_allUsers = m_db->loadAllUsers();
@@ -751,6 +772,43 @@ QString Server::updateUserAvatar(UserModel* user, const QByteArray &data, bool& 
     return hash;
 }
 
+
+
+QString Server::updateServerAvatarOrBanner(const QByteArray &data, bool forBanner)
+{
+    QString hash;
+
+    hash = generateAvatarHash(data); //generate hash for that avatar data.
+
+    if(saveAvatarImage(avatarDirectoryName,hash,data))
+    {
+        qDebug() <<"server's avatar/banner saved into server,local files";
+
+        //check is hash valid
+        if(!hash.isEmpty())
+        {
+            //CODE LATER TO SAVE ON DATABASE SERVER's SETTINGS..
+            if(forBanner)
+            {
+                m_info.bannerHash=hash;
+                qDebug() << "server's banner updated. hash=" << hash;
+            }
+            else
+            {
+                m_info.avatarHash=hash;
+                qDebug() << "server's avatar updated. hash="<<hash;
+            }
+
+            return hash;
+        }
+        else
+            qDebug() << "generated hash is invalid.";
+    }
+    else
+        qDebug() << "faield to save avatar into local files.";
+    return hash;
+}
+
 bool Server::isAvatarHashUsedByAnotherUser(const QString &avatarHash)
 {
     return m_db->isAvatarHashUsedByAnotherUser(avatarHash);
@@ -873,6 +931,22 @@ bool Server::joinTextChannel(UserModel* user,
 
 
     return true;
+}
+
+bool Server::validatePrivilegeToken(UserModel *user, QString token)
+{
+    if(token=="ABC")
+    {
+        if(m_db->updateUserField(user->identity,UserField::IsAdmin,true))
+        {
+            user->isAdmin=true;
+            return true;
+        }
+        else
+            qDebug() << "failed to update user's filed in database.!!!!!!";
+    }
+
+    return false;
 }
 
 void Server::broadcastVoice(
@@ -1015,7 +1089,7 @@ QByteArray Server::buildServerState()
     ServerStatePacket state;
 
     //fill serverInfo
-    state.serverInfo = m_info;
+    state.serverInfo = ServerInfo::convertDataForNormalUser(m_info);
 
     //channels
     for(auto channel : m_channels)
@@ -1079,6 +1153,8 @@ QByteArray Server::buildServerState()
 
         info.camera =
             user->camera;
+
+        info.isAdmin = user->isAdmin;
 
 
         //fill some basic info of user's system to other users.
